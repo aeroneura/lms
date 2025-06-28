@@ -932,6 +932,96 @@ textarea.form-input {
     margin-bottom: 1rem;
 }
 
+/* OAuth Styling */
+.oauth-divider {
+    text-align: center;
+    margin: 1.5rem 0;
+    position: relative;
+}
+
+.oauth-divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.oauth-divider span {
+    background: var(--bg-color);
+    padding: 0 1rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.oauth-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.btn-oauth {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    color: var(--text-primary);
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-oauth:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.btn-google {
+    border-color: #db4437;
+}
+
+.btn-google:hover {
+    background: #db4437;
+    color: white;
+}
+
+.btn-microsoft {
+    border-color: #00a1f1;
+}
+
+.btn-microsoft:hover {
+    background: #00a1f1;
+    color: white;
+}
+
+.btn-apple {
+    border-color: #000000;
+}
+
+.btn-apple:hover {
+    background: #000000;
+    color: white;
+}
+
+[data-theme="dark"] .btn-apple {
+    border-color: #ffffff;
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .btn-apple:hover {
+    background: #ffffff;
+    color: #000000;
+}
+
+.oauth-icon {
+    font-size: 1.125rem;
+}
+
 .demo-buttons {
     margin-top: 1rem;
 }

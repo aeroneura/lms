@@ -174,7 +174,7 @@ class LMSApp {
                     <span class="nav-user">Welcome, ${this.currentUser.name}</span>
                     <button id="logout-btn" class="btn btn-outline">Logout</button>
                 `;
-                
+
                 // Re-attach logout event listener
                 document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
             }
@@ -299,6 +299,13 @@ class LMSApp {
                             </p>
                         </div>
 
+                         <!-- Social Login Buttons -->
+                        <div class="social-login">
+                            <button id="google-login" class="btn btn-outline">Login with Google</button>
+                            <button id="microsoft-login" class="btn btn-outline">Login with Microsoft</button>
+                            <button id="apple-login" class="btn btn-outline">Login with Apple</button>
+                        </div>
+
                         <div class="demo-section card-footer">
                             <p><strong>Demo Account:</strong></p>
                             <p>Email: demo@lms.com</p>
@@ -396,7 +403,7 @@ class LMSApp {
         const form = document.getElementById('login-form');
         form?.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Signing In...';
@@ -406,17 +413,17 @@ class LMSApp {
             const password = formData.get('password');
 
             const result = this.auth.login(email, password);
-            
+
             if (result.success) {
                 this.currentUser = this.storage.getUser();
                 this.showMainApp();
-                
+
                 if (this.currentUser.hasAdmission) {
                     this.router.navigate('dashboard');
                 } else {
                     this.router.navigate('admission');
                 }
-                
+
                 this.showNotification(`Welcome back, ${this.currentUser.name}!`, 'success');
             } else {
                 this.showNotification(result.error, 'error');
@@ -425,13 +432,26 @@ class LMSApp {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Sign In';
         });
+
+        // Handle OAuth login buttons
+        document.getElementById('google-login')?.addEventListener('click', () => {
+            this.auth.loginWithGoogle();
+        });
+
+        document.getElementById('microsoft-login')?.addEventListener('click', () => {
+            this.auth.loginWithMicrosoft();
+        });
+
+        document.getElementById('apple-login')?.addEventListener('click', () => {
+            this.auth.loginWithApple();
+        });
     }
 
     setupRegisterForm() {
         const form = document.getElementById('register-form');
         form?.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Creating Account...';
@@ -450,7 +470,7 @@ class LMSApp {
             }
 
             const result = this.auth.register(name, email, password);
-            
+
             if (result.success) {
                 this.currentUser = this.storage.getUser();
                 this.showMainApp();
@@ -812,7 +832,7 @@ class LMSApp {
         form?.addEventListener('submit', (e) => {
             e.preventDefault();
             const formData = new FormData(form);
-            
+
             // Update user with admission data
             const updatedUser = {
                 ...this.currentUser,
@@ -835,7 +855,7 @@ class LMSApp {
 
     showContact() {
         const currentYear = new Date().getFullYear();
-        
+
         const html = `
             <div class="container">
                 <div class="contact-page">
@@ -911,8 +931,7 @@ class LMSApp {
                                 </div>
                                 <div class="faq-item">
                                     <strong>How long do I have access to a course?</strong>
-                                    <p>Once enrolled, you have lifetime access to the course materials.</p>
-                                </div>
+                                    <p>Once enrolled, you have lifetime access to the course materials.</p>                                </div>
                                 <div class="faq-item">
                                     <strong>Can I download course materials?</strong>
                                     <p>Yes, most course materials are available for download for offline study.</p>
@@ -936,7 +955,7 @@ class LMSApp {
 
         const currentYear = new Date().getFullYear();
         const joinYear = new Date(this.currentUser.joinDate).getFullYear();
-        
+
         const html = `
             <div class="container">
                 <div class="profile-page">
@@ -1041,7 +1060,7 @@ class LMSApp {
         const form = document.getElementById('contact-form');
         form?.addEventListener('submit', (e) => {
             e.preventDefault();
-            
+
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Sending...';
@@ -1060,7 +1079,7 @@ class LMSApp {
         const form = document.getElementById('profile-form');
         form?.addEventListener('submit', (e) => {
             e.preventDefault();
-            
+
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Updating...';
@@ -1077,7 +1096,7 @@ class LMSApp {
             };
 
             const result = this.auth.updateUserProfile(profileData);
-            
+
             if (result.success) {
                 this.currentUser = result.user;
                 this.showNotification('Profile updated successfully!', 'success');
@@ -1101,15 +1120,15 @@ class LMSApp {
             courses: this.courses.getEnrolledCourses(),
             certificates: this.certificates.getUserCertificates()
         };
-        
+
         const dataStr = JSON.stringify(userData, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
-        
+
         const link = document.createElement('a');
         link.href = URL.createObjectURL(dataBlob);
         link.download = `lms-data-${new Date().toISOString().split('T')[0]}.json`;
         link.click();
-        
+
         this.showNotification('Data exported successfully!', 'success');
     }
 
@@ -1146,7 +1165,7 @@ class LMSApp {
 
     showSettings() {
         const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-        
+
         const html = `
             <div class="container">
                 <div class="settings-page">
@@ -1159,7 +1178,7 @@ class LMSApp {
                         <div class="appearance-settings card">
                             <div class="settings-section">
                                 <h3>🎨 Appearance</h3>
-                                
+
                                 <div class="setting-item">
                                     <div class="setting-info">
                                         <h4>Theme</h4>
@@ -1205,7 +1224,7 @@ class LMSApp {
                         <div class="learning-settings card">
                             <div class="settings-section">
                                 <h3>📚 Learning Preferences</h3>
-                                
+
                                 <div class="setting-item">
                                     <div class="setting-info">
                                         <h4>Auto-save Progress</h4>
@@ -1253,7 +1272,7 @@ class LMSApp {
                         <div class="privacy-settings card">
                             <div class="settings-section">
                                 <h3>🔒 Privacy & Security</h3>
-                                
+
                                 <div class="setting-item">
                                     <div class="setting-info">
                                         <h4>Profile Visibility</h4>
@@ -1285,7 +1304,7 @@ class LMSApp {
                         <div class="account-settings card">
                             <div class="settings-section">
                                 <h3>👤 Account Management</h3>
-                                
+
                                 <div class="setting-item">
                                     <div class="setting-info">
                                         <h4>Two-Factor Authentication</h4>
@@ -1392,6 +1411,26 @@ class LMSApp {
                 </div>
             </div>
         `);
+    }
+
+    checkAuthAndRender() {
+        this.currentUser = this.auth.getCurrentUser();
+        this.updateNavigation();
+        this.router.handleRoute();
+    }
+
+    // Handle OAuth callbacks
+    handleOAuthCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const provider = window.location.pathname.split('/')[2]; // Extract provider from path
+
+        if (code && provider) {
+            // Process OAuth callback
+            this.auth.handleOAuthCallback(provider);
+            // Clean up URL
+            window.history.replaceState({}, document.title, '/');
+        }
     }
 }
 

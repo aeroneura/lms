@@ -3,6 +3,23 @@ class Auth {
     constructor() {
         this.storage = new Storage();
         this.sessionTimeout = 24 * 60 * 60 * 1000; // 24 hours
+        this.oauthProviders = {
+            google: {
+                clientId: 'your-google-client-id',
+                redirectUri: window.location.origin + '/oauth/google',
+                scope: 'openid email profile'
+            },
+            microsoft: {
+                clientId: 'your-microsoft-client-id',
+                redirectUri: window.location.origin + '/oauth/microsoft',
+                scope: 'openid email profile'
+            },
+            apple: {
+                clientId: 'your-apple-client-id',
+                redirectUri: window.location.origin + '/oauth/apple',
+                scope: 'openid email name'
+            }
+        };
     }
 
     validateEmail(email) {
@@ -217,5 +234,167 @@ class Auth {
 
     generateId() {
         return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    // OAuth Login Methods
+    loginWithGoogle() {
+        const config = this.oauthProviders.google;
+        const authUrl = `https://accounts.google.com/oauth/authorize?` +
+            `client_id=${config.clientId}&` +
+            `redirect_uri=${encodeURIComponent(config.redirectUri)}&` +
+            `scope=${encodeURIComponent(config.scope)}&` +
+            `response_type=code&` +
+            `state=${this.generateState()}`;
+        
+        this.openOAuthWindow(authUrl, 'google');
+    }
+
+    loginWithMicrosoft() {
+        const config = this.oauthProviders.microsoft;
+        const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?` +
+            `client_id=${config.clientId}&` +
+            `redirect_uri=${encodeURIComponent(config.redirectUri)}&` +
+            `scope=${encodeURIComponent(config.scope)}&` +
+            `response_type=code&` +
+            `state=${this.generateState()}`;
+        
+        this.openOAuthWindow(authUrl, 'microsoft');
+    }
+
+    loginWithApple() {
+        const config = this.oauthProviders.apple;
+        const authUrl = `https://appleid.apple.com/auth/authorize?` +
+            `client_id=${config.clientId}&` +
+            `redirect_uri=${encodeURIComponent(config.redirectUri)}&` +
+            `scope=${encodeURIComponent(config.scope)}&` +
+            `response_type=code&` +
+            `response_mode=form_post&` +
+            `state=${this.generateState()}`;
+        
+        this.openOAuthWindow(authUrl, 'apple');
+    }
+
+    openOAuthWindow(url, provider) {
+        const width = 500;
+        const height = 600;
+        const left = (screen.width / 2) - (width / 2);
+        const top = (screen.height / 2) - (height / 2);
+
+        const popup = window.open(
+            url,
+            `${provider}_oauth`,
+            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
+
+        // Listen for the OAuth callback
+        const checkClosed = setInterval(() => {
+            if (popup.closed) {
+                clearInterval(checkClosed);
+                // Check for OAuth result in storage
+                this.handleOAuthCallback(provider);
+            }
+        }, 1000);
+
+        // Listen for messages from popup
+        window.addEventListener('message', (event) => {
+            if (event.origin !== window.location.origin) return;
+            
+            if (event.data.type === 'oauth_success') {
+                clearInterval(checkClosed);
+                popup.close();
+                this.processOAuthUser(event.data.user, provider);
+            } else if (event.data.type === 'oauth_error') {
+                clearInterval(checkClosed);
+                popup.close();
+                console.error('OAuth error:', event.data.error);
+            }
+        });
+    }
+
+    generateState() {
+        const state = Math.random().toString(36).substring(2, 15) + 
+                     Math.random().toString(36).substring(2, 15);
+        sessionStorage.setItem('oauth_state', state);
+        return state;
+    }
+
+    handleOAuthCallback(provider) {
+        // This would be called after OAuth redirect
+        // In a real implementation, you'd handle the authorization code here
+        // For demo purposes, we'll simulate successful OAuth
+        const mockUser = {
+            google: {
+                id: 'google_demo_user',
+                name: 'Google User',
+                email: 'user@gmail.com',
+                picture: 'https://via.placeholder.com/100'
+            },
+            microsoft: {
+                id: 'microsoft_demo_user',
+                name: 'Microsoft User',
+                email: 'user@outlook.com',
+                picture: 'https://via.placeholder.com/100'
+            },
+            apple: {
+                id: 'apple_demo_user',
+                name: 'Apple User',
+                email: 'user@icloud.com',
+                picture: 'https://via.placeholder.com/100'
+            }
+        };
+
+        this.processOAuthUser(mockUser[provider], provider);
+    }
+
+    processOAuthUser(oauthUser, provider) {
+        try {
+            // Check if user already exists
+            const users = this.storage.getItem('users') || [];
+            let existingUser = users.find(u => u.email === oauthUser.email);
+
+            if (existingUser) {
+                // Update existing user
+                existingUser.lastLogin = new Date().toISOString();
+                existingUser.oauthProvider = provider;
+                
+                const userIndex = users.findIndex(u => u.id === existingUser.id);
+                users[userIndex] = existingUser;
+                this.storage.setItem('users', users);
+                this.storage.saveUser(existingUser);
+            } else {
+                // Create new user from OAuth data
+                const newUser = {
+                    id: this.generateId(),
+                    name: oauthUser.name,
+                    email: oauthUser.email,
+                    joinDate: new Date().toISOString(),
+                    lastLogin: new Date().toISOString(),
+                    hasAdmission: true,
+                    oauthProvider: provider,
+                    oauthId: oauthUser.id,
+                    profile: {
+                        avatar: oauthUser.picture || null,
+                        bio: '',
+                        phone: '',
+                        education: '',
+                        goals: ''
+                    }
+                };
+
+                users.push(newUser);
+                this.storage.setItem('users', users);
+                this.storage.saveUser(newUser);
+            }
+
+            // Trigger app refresh to show logged in state
+            if (window.app) {
+                window.app.checkAuthAndRender();
+            }
+
+            return { success: true, user: existingUser || newUser };
+        } catch (error) {
+            console.error('OAuth processing error:', error);
+            return { success: false, error: error.message };
+        }
     }
 }
