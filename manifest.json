@@ -1,12 +1,12 @@
 {
-    "name": "LMS - Learning Management System",
+    "name": "LMS Platform - Learning Management System",
     "short_name": "LMS Platform",
-    "description": "Complete Learning Management System with offline capability",
+    "description": "Modern Learning Management System with offline capabilities",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",
-    "theme_color": "#2563eb",
-    "orientation": "any",
+    "theme_color": "#4F46E5",
+    "orientation": "portrait-primary",
     "scope": "/",
     "lang": "en",
     "categories": ["education", "productivity"],
@@ -22,32 +22,6 @@
             "sizes": "512x512",
             "type": "image/svg+xml",
             "purpose": "any maskable"
-        }
-    ],
-    "shortcuts": [
-        {
-            "name": "Browse Courses",
-            "short_name": "Courses",
-            "description": "Browse available courses",
-            "url": "/#/courses",
-            "icons": [
-                {
-                    "src": "icons/icon-192.svg",
-                    "sizes": "192x192"
-                }
-            ]
-        },
-        {
-            "name": "Search",
-            "short_name": "Search",
-            "description": "Search for courses",
-            "url": "/#/search",
-            "icons": [
-                {
-                    "src": "icons/icon-192.svg",
-                    "sizes": "192x192"
-                }
-            ]
         }
     ]
 }

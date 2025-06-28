@@ -2,6 +2,128 @@
 class SearchManager {
     constructor() {
         this.searchResults = [];
+        this.currentQuery = '';
+    }
+    
+    search(query) {
+        this.currentQuery = query.toLowerCase();
+        
+        if (!query.trim()) {
+            this.searchResults = [];
+            return this.searchResults;
+        }
+        
+        this.searchResults = COURSES_DATA.filter(course => {
+            return course.title.toLowerCase().includes(this.currentQuery) ||
+                   course.description.toLowerCase().includes(this.currentQuery) ||
+                   course.category.toLowerCase().includes(this.currentQuery) ||
+                   course.instructor.toLowerCase().includes(this.currentQuery);
+        });
+        
+        return this.searchResults;
+    }
+    
+    renderSearch() {
+        const html = `
+            <div class="search-page">
+                <div class="page-header">
+                    <h1>Search Courses</h1>
+                    <p class="text-gray-600">Find the perfect course for you</p>
+                </div>
+                
+                <div class="search-form">
+                    <div class="form-group">
+                        <input type="text" 
+                               id="search-input" 
+                               placeholder="Search courses, topics, or instructors..." 
+                               class="form-input"
+                               value="${this.currentQuery}">
+                        <button onclick="window.lmsApp.search.performSearch()" class="btn btn-primary">Search</button>
+                    </div>
+                </div>
+                
+                <div id="search-results" class="search-results">
+                    ${this.renderResults()}
+                </div>
+            </div>
+        `;
+        
+        const mainContent = document.getElementById('main-content');
+        if (mainContent) {
+            mainContent.innerHTML = html;
+            
+            // Add event listener for enter key
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.performSearch();
+                    }
+                });
+            }
+        }
+    }
+    
+    performSearch() {
+        const searchInput = document.getElementById('search-input');
+        const query = searchInput ? searchInput.value : '';
+        
+        this.search(query);
+        
+        const resultsContainer = document.getElementById('search-results');
+        if (resultsContainer) {
+            resultsContainer.innerHTML = this.renderResults();
+        }
+    }
+    
+    renderResults() {
+        if (!this.currentQuery) {
+            return `
+                <div class="text-center py-8">
+                    <p class="text-gray-600">Enter a search term to find courses</p>
+                </div>
+            `;
+        }
+        
+        if (this.searchResults.length === 0) {
+            return `
+                <div class="text-center py-8">
+                    <p class="text-gray-600">No courses found for "${this.currentQuery}"</p>
+                </div>
+            `;
+        }
+        
+        return `
+            <div class="search-results-header">
+                <p>Found ${this.searchResults.length} course${this.searchResults.length !== 1 ? 's' : ''} for "${this.currentQuery}"</p>
+            </div>
+            <div class="course-grid">
+                ${this.searchResults.map(course => `
+                    <div class="course-card">
+                        <div class="course-image">
+                            <img src="${course.image}" alt="${course.title}" loading="lazy">
+                        </div>
+                        <div class="course-content">
+                            <h3>${course.title}</h3>
+                            <p class="course-description">${course.description}</p>
+                            <div class="course-meta">
+                                <span class="course-instructor">By ${course.instructor}</span>
+                                <span class="course-duration">${course.duration}</span>
+                                <span class="course-level">${course.level}</span>
+                            </div>
+                            <div class="course-actions">
+                                <a href="/course/${course.id}" class="btn btn-primary">View Course</a>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+}
+class SearchManager {
+    constructor() {
+        this.searchResults = [];
         this.searchQuery = '';
         this.searchFilters = {
             category: '',

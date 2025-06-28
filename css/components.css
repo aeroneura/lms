@@ -511,46 +511,46 @@
         flex-direction: column;
         text-align: center;
     }
-    
+
     .search-filters {
         flex-direction: column;
     }
-    
+
     .quiz-navigation {
         flex-direction: column;
         gap: 1rem;
     }
-    
+
     .certificate {
         padding: 2rem 1rem;
     }
-    
+
     .certificate-title {
         font-size: 1.5rem;
     }
-    
+
     .certificate-course {
         font-size: 1.25rem;
     }
-    
+
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .stat-number {
         font-size: 2rem;
     }
-    
+
     .course-footer {
         flex-direction: column;
         gap: 1rem;
         align-items: stretch;
     }
-    
+
     .video-controls {
         padding: 0.5rem;
     }
-    
+
     .video-time {
         font-size: 0.75rem;
     }
@@ -563,11 +563,11 @@
         color: #000000 !important;
         border: 2px solid #000000;
     }
-    
+
     .certificate::before {
         display: none;
     }
-    
+
     .certificate-actions {
         display: none;
     }
@@ -578,11 +578,11 @@
     .card {
         border: 2px solid #000000;
     }
-    
+
     .btn {
         border: 2px solid;
     }
-    
+
     .quiz-option {
         border-width: 3px;
     }
@@ -948,4 +948,186 @@ textarea.form-input {
 
 .nav-menu[style*="display: flex"] {
     display: flex !important;
+}
+
+/* Certificate Modal Styles */
+.certificate-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 2rem;
+}
+
+.certificate-modal-content {
+    background: white;
+    border-radius: 1rem;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.certificate-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 2rem;
+    height: 2rem;
+    background: #ef4444;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.25rem;
+    font-weight: bold;
+    z-index: 10;
+}
+
+.certificate-view {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 3rem;
+    text-align: center;
+    position: relative;
+}
+
+.certificate-header-view h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.certificate-seal {
+    font-size: 4rem;
+    margin: 1rem 0;
+}
+
+.certificate-body-view {
+    margin: 2rem 0;
+}
+
+.certificate-text {
+    font-size: 1.2rem;
+    margin: 0.5rem 0;
+    opacity: 0.9;
+}
+
+.certificate-name {
+    font-size: 2.5rem;
+    margin: 1rem 0;
+    color: #ffd700;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.certificate-course {
+    font-size: 1.8rem;
+    margin: 1rem 0;
+    color: #ffd700;
+}
+
+.certificate-footer-view {
+    margin-top: 3rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+}
+
+.signature-line {
+    width: 200px;
+    height: 2px;
+    background: white;
+    margin-bottom: 0.5rem;
+}
+
+.certificate-id {
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+.certificate-actions-modal {
+    padding: 2rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+/* Certificate Grid Styles */
+.certificates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 2rem;
+}
+
+.certificate-card {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.certificate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1rem 0;
+}
+
+.certificate-icon {
+    font-size: 2rem;
+}
+
+.certificate-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.certificate-title {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    color: white;
+}
+
+.certificate-student,
+.certificate-date,
+.certificate-score {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.9;
+}
+
+.certificate-card .card-footer {
+    background: rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.certificate-card .btn {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: white;
+}
+
+.certificate-card .btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Empty State Styles */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }

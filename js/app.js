@@ -1,1238 +1,1144 @@
-// Main application controller
 class LMSApp {
     constructor() {
-        this.router = new Router();
         this.storage = new Storage();
-        this.courses = new CoursesManager();
-        this.quiz = new QuizManager();
-        this.search = new SearchManager();
-        this.certificate = new CertificateManager();
-        
+        this.router = new Router();
+        this.auth = new Auth();
+        this.courses = new Courses();
+        this.quiz = new Quiz();
+        this.certificates = new Certificates();
+
         this.currentUser = null;
-        this.installPrompt = null;
-        
+        this.isInitialized = false;
+
         this.init();
     }
-    
+
     async init() {
         try {
-            // Initialize user session
-            this.currentUser = this.storage.getUser() || this.createDefaultUser();
-            
-            // Setup PWA features
-            this.setupPWA();
-            
-            // Setup offline detection
-            this.setupOfflineDetection();
-            
-            // Setup navigation
-            this.setupNavigation();
-            
-            // Initialize router
+            console.log('Initializing LMS App...');
+
+            // Set global reference early for router access
+            window.app = this;
+
+            // Check for existing user session
+            this.currentUser = this.storage.getUser();
+
+            // Setup routes
             this.setupRoutes();
-            
-            // Hide loading screen and show app
-            this.showApp();
-            
+
+            // Setup event listeners
+            this.setupEventListeners();
+
+            // Initialize router
+            this.router.init();
+
+            // Hide loading screen
+            this.hideLoadingScreen();
+
+            // Show appropriate view based on auth state
+            if (this.currentUser) {
+                this.showMainApp();
+                if (this.currentUser.hasAdmission) {
+                    this.router.navigate('dashboard');
+                } else {
+                    this.router.navigate('admission');
+                }
+            } else {
+                this.showMainApp();
+                this.router.navigate('');
+            }
+
+            this.isInitialized = true;
+            this.updateCurrentYear();
             console.log('LMS App initialized successfully');
+
         } catch (error) {
             console.error('Error initializing app:', error);
             this.showError('Failed to initialize application');
         }
     }
-    
-    createDefaultUser() {
-        // No default user - authentication required to access courses
-        this.currentUser = null;
-        return null;
-    }
-    
-    setupPWA() {
-        // Handle install prompt
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            this.installPrompt = e;
-            this.showInstallBanner();
-        });
-        
-        // Handle successful installation
-        window.addEventListener('appinstalled', () => {
-            this.hideInstallBanner();
-            console.log('PWA was installed');
-        });
-        
-        // Setup install button
-        const installBtn = document.getElementById('install-btn');
-        if (installBtn) {
-            installBtn.addEventListener('click', () => {
-                this.installApp();
-            });
-        }
-        
-        const dismissBtn = document.getElementById('dismiss-install');
-        if (dismissBtn) {
-            dismissBtn.addEventListener('click', () => {
-                this.hideInstallBanner();
-            });
-        }
-    }
-    
-    setupOfflineDetection() {
-        const updateOnlineStatus = () => {
-            const banner = document.getElementById('offline-banner');
-            if (navigator.onLine) {
-                banner?.classList.remove('show');
-            } else {
-                banner?.classList.add('show');
-            }
-        };
-        
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-        
-        // Initial check
-        updateOnlineStatus();
-    }
-    
-    setupNavigation() {
-        // Mobile menu toggle
-        const navToggle = document.querySelector('.nav-toggle');
-        const navMenu = document.querySelector('.nav-menu');
-        
-        if (navToggle && navMenu) {
-            navToggle.addEventListener('click', () => {
-                navMenu.classList.toggle('active');
-            });
-        }
-        
-        // Close mobile menu when clicking on a link
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', () => {
-                navMenu?.classList.remove('active');
-            });
-        });
-        
-        // Update active nav link
-        this.updateActiveNavLink();
-        window.addEventListener('hashchange', () => {
-            this.updateActiveNavLink();
-        });
-    }
-    
+
     setupRoutes() {
-        // Public routes (no authentication required)
-        this.router.addRoute('/login', () => this.showLogin());
-        this.router.addRoute('/signup', () => this.showSignup());
-        this.router.addRoute('/contact', () => this.showContact());
-        this.router.addRoute('/about', () => this.showAbout());
-        this.router.addRoute('/privacy', () => this.showPrivacy());
-        this.router.addRoute('/terms', () => this.showTerms());
-        
-        // Protected routes (authentication required)
-        this.router.addRoute('/', () => this.requireAuth(() => this.showDashboard()));
-        this.router.addRoute('/courses', () => this.requireAuth(() => this.showCourses()));
-        this.router.addRoute('/course/:id', (params) => this.requireAuth(() => this.showCourse(params.id)));
-        this.router.addRoute('/lesson/:courseId/:lessonId', (params) => 
-            this.requireAuth(() => this.showLesson(params.courseId, params.lessonId)));
-        this.router.addRoute('/quiz/:courseId/:quizId', (params) => 
-            this.requireAuth(() => this.showQuiz(params.courseId, params.quizId)));
-        this.router.addRoute('/search', () => this.requireAuth(() => this.showSearch()));
-        this.router.addRoute('/certificates', () => this.requireAuth(() => this.showCertificates()));
-        
-        // Start router
-        this.router.start();
+        // Public routes
+        this.router.addRoute('', () => this.showHome());
+        this.router.addRoute('login', () => this.showLogin());
+        this.router.addRoute('register', () => this.showRegister());
+        this.router.addRoute('courses', () => this.showPublicCourses());
+        this.router.addRoute('course/:id', (params) => this.showCourseSyllabus(params.id));
+        this.router.addRoute('admission', () => this.showAdmission());
+        this.router.addRoute('contact', () => this.showContact());
+        this.router.addRoute('profile', () => this.requireAuth(() => this.showProfile()));
+
+        // Protected routes (require admission/enrollment)
+        this.router.addRoute('dashboard', () => this.requireAdmission(() => this.showDashboard()));
+        this.router.addRoute('my-courses', () => this.requireAdmission(() => this.courses.showCourseList()));
+        this.router.addRoute('study/:id', (params) => this.requireAdmission(() => this.courses.showCourse(params.id)));
+        this.router.addRoute('lesson/:courseId/:lessonId', (params) => 
+            this.requireAdmission(() => this.courses.showLesson(params.courseId, params.lessonId)));
+        this.router.addRoute('quiz/:courseId/:quizId', (params) => 
+            this.requireAdmission(() => this.quiz.showQuiz(params.courseId, params.quizId)));
+        this.router.addRoute('search', () => this.requireAdmission(() => this.showSearch()));
+        this.router.addRoute('certificates', () => this.requireAdmission(() => this.certificates.showCertificates()));
+
+        // Default route
+        this.router.setDefaultRoute('');
     }
-    
-    showApp() {
-        document.getElementById('loading')?.classList.add('hidden');
-        document.getElementById('app')?.classList.remove('hidden');
+
+    setupEventListeners() {
+        // Logout button
+        document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
+
+        // Mobile menu toggle
+        document.getElementById('nav-toggle')?.addEventListener('click', () => {
+            const navMenu = document.getElementById('nav-menu');
+            navMenu?.classList.toggle('active');
+        });
+
+        // Navigation links
+        document.addEventListener('click', (e) => {
+            if (e.target.matches('.nav-link')) {
+                const route = e.target.getAttribute('data-route');
+                if (route) {
+                    e.preventDefault();
+                    this.router.navigate(route);
+
+                    // Close mobile menu
+                    document.getElementById('nav-menu')?.classList.remove('active');
+                }
+            }
+        });
+    }
+
+    requireAuth(callback) {
+        if (this.currentUser) {
+            callback();
+        } else {
+            this.showNotification('Please log in to access this page', 'warning');
+            this.router.navigate('login');
+        }
+    }
+
+    requireAdmission(callback) {
+        if (this.currentUser && this.currentUser.hasAdmission) {
+            callback();
+        } else if (this.currentUser) {
+            this.showNotification('Please complete admission to access course content', 'warning');
+            this.router.navigate('admission');
+        } else {
+            this.showNotification('Please sign up and complete admission to access this page', 'warning');
+            this.router.navigate('register');
+        }
+    }
+
+    hideLoadingScreen() {
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            setTimeout(() => {
+                loadingScreen.style.opacity = '0';
+                setTimeout(() => {
+                    loadingScreen.classList.add('hidden');
+                }, 300);
+            }, 1000);
+        }
+    }
+
+    showMainApp() {
+        document.getElementById('navbar')?.classList.remove('hidden');
+        document.getElementById('main-content')?.classList.remove('hidden');
         this.updateNavigation();
     }
-    
-    requireAuth(callback) {
-        if (!this.currentUser || !this.currentUser.isAuthenticated) {
-            this.showNotification('Please log in to access this page.', 'warning');
-            this.router.navigate('/login');
-            return;
-        }
-        callback();
-    }
-    
+
     updateNavigation() {
-        const navMenu = document.querySelector('.nav-menu');
-        const navAuth = document.querySelector('.nav-auth');
-        
-        if (this.currentUser && this.currentUser.isAuthenticated) {
-            // Show main navigation for authenticated users
-            if (navMenu) navMenu.style.display = 'flex';
+        const navLinks = document.querySelectorAll('.nav-link');
+        const currentRoute = this.router.getCurrentRoute();
+        const navAuth = document.getElementById('nav-auth');
+        const navMenu = document.getElementById('nav-menu');
+
+        // Update active link
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('data-route') === currentRoute) {
+                link.classList.add('active');
+            }
+        });
+
+        // Update navigation based on authentication status
+        if (this.currentUser) {
+            // Show authenticated navigation
             if (navAuth) {
                 navAuth.innerHTML = `
                     <span class="nav-user">Welcome, ${this.currentUser.name}</span>
-                    <button onclick="window.lmsApp.logout()" class="btn btn-outline btn-sm">Logout</button>
+                    <button id="logout-btn" class="btn btn-outline">Logout</button>
+                `;
+                
+                // Re-attach logout event listener
+                document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
+            }
+
+            // Show authenticated nav links
+            if (navMenu) {
+                navMenu.innerHTML = `
+                    <a href="/courses" class="nav-link" data-route="courses">Browse Courses</a>
+                    <a href="/dashboard" class="nav-link" data-route="dashboard">Dashboard</a>
+                    <a href="/my-courses" class="nav-link" data-route="my-courses">My Courses</a>
+                    <a href="/search" class="nav-link" data-route="search">Search</a>
+                    <a href="/certificates" class="nav-link" data-route="certificates">Certificates</a>
+                    <a href="/profile" class="nav-link" data-route="profile">Profile</a>
+                    <a href="/contact" class="nav-link" data-route="contact">Contact</a>
                 `;
             }
         } else {
-            // Hide main navigation for unauthenticated users
-            if (navMenu) navMenu.style.display = 'none';
+            // Show guest navigation - NO LOGOUT BUTTON
             if (navAuth) {
                 navAuth.innerHTML = `
-                    <a href="/login" class="nav-link" data-route="/login">Login</a>
-                    <a href="/signup" class="nav-link btn btn-primary" data-route="/signup">Sign Up</a>
+                    <a href="/login" class="btn btn-outline nav-link" data-route="login">Login</a>
+                    <a href="/register" class="btn btn-primary nav-link" data-route="register">Sign Up</a>
+                `;
+            }
+
+            // Show guest nav links
+            if (navMenu) {
+                navMenu.innerHTML = `
+                    <a href="/" class="nav-link" data-route="">Home</a>
+                    <a href="/courses" class="nav-link" data-route="courses">Browse Courses</a>
+                    <a href="/contact" class="nav-link" data-route="contact">Contact</a>
                 `;
             }
         }
     }
-    
-    logout() {
-        this.currentUser = null;
-        this.storage.removeItem('lms_user');
-        this.showNotification('You have been logged out successfully.', 'info');
-        this.updateNavigation();
-        this.router.navigate('/login');
-    }
-    
-    showError(message) {
-        const mainContent = document.getElementById('main-content');
-        if (mainContent) {
-            mainContent.innerHTML = `
-                <div class="card">
-                    <div class="card-body text-center">
-                        <h2>Error</h2>
-                        <p class="text-gray-600">${message}</p>
-                        <button class="btn btn-primary" onclick="location.reload()">
-                            Reload Application
-                        </button>
+
+    showDashboard() {
+        const enrolledCourses = this.courses.getEnrolledCourses();
+        const completedCourses = this.courses.getCompletedCourses();
+        const certificates = this.certificates.getUserCertificates();
+
+        const html = `
+            <div class="container">
+                <div class="dashboard">
+                    <div class="dashboard-header">
+                        <h1>Welcome back, ${this.currentUser.name}!</h1>
+                        <p>Continue your learning journey</p>
                     </div>
+
+                    <div class="stats-grid grid grid-4">
+                        <div class="stat-card card">
+                            <h3>${enrolledCourses.length}</h3>
+                            <p>Enrolled Courses</p>
+                        </div>
+                        <div class="stat-card card">
+                            <h3>${completedCourses.length}</h3>
+                            <p>Completed</p>
+                        </div>
+                        <div class="stat-card card">
+                            <h3>${certificates.length}</h3>
+                            <p>Certificates</p>
+                        </div>
+                        <div class="stat-card card">
+                            <h3>${this.calculateTotalHours()}</h3>
+                            <p>Hours Learned</p>
+                        </div>
+                    </div>
+
+                    ${enrolledCourses.length > 0 ? `
+                        <div class="recent-courses">
+                            <h2>Continue Learning</h2>
+                            <div class="courses-grid grid grid-3">
+                                ${enrolledCourses.slice(0, 3).map(course => this.renderCourseCard(course)).join('')}
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="no-courses card text-center">
+                            <h2>Start Your Learning Journey</h2>
+                            <p>You haven't enrolled in any courses yet.</p>
+                            <button class="btn btn-primary" onclick="app.router.navigate('courses')">
+                                Browse Courses
+                            </button>
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+
+        this.renderContent(html);
+    }
+
+    showLogin() {
+        const html = `
+            <div class="container">
+                <div class="auth-container">
+                    <div class="auth-card card" style="max-width: 400px; margin: 2rem auto;">
+                        <div class="card-header text-center">
+                            <h1>Welcome to LMS Platform</h1>
+                            <p>Sign in to continue learning</p>
+                        </div>
+
+                        <form id="login-form" class="card-body">
+                            <div class="form-group">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-input" name="email" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Password</label>
+                                <input type="password" class="form-input" name="password" required>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                Sign In
+                            </button>
+                        </form>
+
+                        <div class="card-footer text-center">
+                            <p>Don't have an account? 
+                                <a href="#" onclick="app.router.navigate('register')">Register here</a>
+                            </p>
+                        </div>
+
+                        <div class="demo-section card-footer">
+                            <p><strong>Demo Account:</strong></p>
+                            <p>Email: demo@lms.com</p>
+                            <p>Password: demo123</p>
+                            <button type="button" class="btn btn-outline" onclick="app.loginDemo()">
+                                Login with Demo Account
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.renderContent(html);
+        this.setupLoginForm();
+    }
+
+    showRegister() {
+        const html = `
+            <div class="container">
+                <div class="auth-container">
+                    <div class="auth-card card" style="max-width: 400px; margin: 2rem auto;">
+                        <div class="card-header text-center">
+                            <h1>Join LMS Platform</h1>
+                            <p>Create your account to start learning</p>
+                        </div>
+
+                        <form id="register-form" class="card-body">
+                            <div class="form-group">
+                                <label class="form-label">Full Name</label>
+                                <input type="text" class="form-input" name="name" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-input" name="email" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Password</label>
+                                <input type="password" class="form-input" name="password" required minlength="6">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Confirm Password</label>
+                                <input type="password" class="form-input" name="confirmPassword" required>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                Create Account
+                            </button>
+                        </form>
+
+                        <div class="card-footer text-center">
+                            <p>Already have an account? 
+                                <a href="#" onclick="app.router.navigate('login')">Sign in here</a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.renderContent(html);
+        this.setupRegisterForm();
+    }
+
+    showSearch() {
+        const html = `
+            <div class="container">
+                <div class="search-page">
+                    <div class="search-header">
+                        <h1>Search Courses</h1>
+                        <div class="search-bar">
+                            <input type="text" class="form-input" id="search-input" 
+                                   placeholder="Search for courses, topics, or instructors...">
+                            <button class="btn btn-primary" onclick="app.performSearch()">Search</button>
+                        </div>
+                    </div>
+
+                    <div id="search-results" class="search-results">
+                        <div class="courses-grid grid grid-3">
+                            ${COURSES_DATA.map(course => this.renderCourseCard(course)).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.renderContent(html);
+        this.setupSearch();
+    }
+
+    setupLoginForm() {
+        const form = document.getElementById('login-form');
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Signing In...';
+
+            const formData = new FormData(form);
+            const email = formData.get('email');
+            const password = formData.get('password');
+
+            const result = this.auth.login(email, password);
+            
+            if (result.success) {
+                this.currentUser = this.storage.getUser();
+                this.showMainApp();
+                
+                if (this.currentUser.hasAdmission) {
+                    this.router.navigate('dashboard');
+                } else {
+                    this.router.navigate('admission');
+                }
+                
+                this.showNotification(`Welcome back, ${this.currentUser.name}!`, 'success');
+            } else {
+                this.showNotification(result.error, 'error');
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Sign In';
+        });
+    }
+
+    setupRegisterForm() {
+        const form = document.getElementById('register-form');
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating Account...';
+
+            const formData = new FormData(form);
+            const name = formData.get('name');
+            const email = formData.get('email');
+            const password = formData.get('password');
+            const confirmPassword = formData.get('confirmPassword');
+
+            if (password !== confirmPassword) {
+                this.showNotification('Passwords do not match', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Account';
+                return;
+            }
+
+            const result = this.auth.register(name, email, password);
+            
+            if (result.success) {
+                this.currentUser = this.storage.getUser();
+                this.showMainApp();
+                this.router.navigate('admission');
+                this.showNotification('Account created successfully! Please complete your admission.', 'success');
+            } else {
+                this.showNotification(result.error, 'error');
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Account';
+        });
+    }
+
+    setupSearch() {
+        const searchInput = document.getElementById('search-input');
+        searchInput?.addEventListener('input', (e) => {
+            this.performSearch(e.target.value);
+        });
+    }
+
+    performSearch(query = '') {
+        const searchInput = document.getElementById('search-input');
+        if (!query && searchInput) {
+            query = searchInput.value;
+        }
+
+        const results = this.courses.searchCourses(query);
+        const resultsContainer = document.getElementById('search-results');
+
+        if (resultsContainer) {
+            resultsContainer.innerHTML = `
+                <div class="search-info">
+                    <p>Found ${results.length} course${results.length !== 1 ? 's' : ''} 
+                       ${query ? `for "${query}"` : ''}</p>
+                </div>
+                <div class="courses-grid grid grid-3">
+                    ${results.map(course => this.renderCourseCard(course)).join('')}
                 </div>
             `;
         }
     }
-    
-    showInstallBanner() {
-        const banner = document.getElementById('install-banner');
-        if (banner && this.installPrompt) {
-            banner.classList.add('show');
+
+    loginDemo() {
+        if (this.auth.login('demo@lms.com', 'demo123')) {
+            this.currentUser = this.storage.getUser();
+            this.showMainApp();
+            this.router.navigate('dashboard');
+            this.showNotification('Logged in with demo account!', 'success');
         }
     }
-    
-    hideInstallBanner() {
-        const banner = document.getElementById('install-banner');
-        banner?.classList.remove('show');
+
+    logout() {
+        this.auth.logout();
+        this.currentUser = null;
+        this.updateNavigation();
+        this.router.navigate('');
+        this.showNotification('Logged out successfully', 'info');
     }
-    
-    async installApp() {
-        if (this.installPrompt) {
-            const result = await this.installPrompt.prompt();
-            console.log('Install prompt result:', result);
-            this.installPrompt = null;
-            this.hideInstallBanner();
-        }
-    }
-    
-    updateActiveNavLink() {
-        const currentPath = window.location.pathname || '/';
-        document.querySelectorAll('.nav-link').forEach(link => {
-            const route = link.getAttribute('data-route');
-            if (route === currentPath || (currentPath.startsWith(route) && route !== '/')) {
-                link.classList.add('active');
-            } else {
-                link.classList.remove('active');
-            }
-        });
-    }
-    
-    // Route handlers
-    showDashboard() {
-        const enrolledCourses = this.currentUser.enrolledCourses.map(courseId => 
-            COURSES_DATA.find(course => course.id === courseId)
-        ).filter(Boolean);
-        
-        const completedCount = this.currentUser.completedCourses.length;
-        const inProgressCount = enrolledCourses.length - completedCount;
-        const certificatesCount = this.currentUser.certificates.length;
-        
-        const html = `
-            <div class="dashboard">
-                <h1>Welcome back, ${this.currentUser.name}!</h1>
-                <p class="text-gray-600 mb-6">Continue your learning journey</p>
-                
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-number">${enrolledCourses.length}</div>
-                        <div class="stat-label">Enrolled Courses</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${inProgressCount}</div>
-                        <div class="stat-label">In Progress</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${completedCount}</div>
-                        <div class="stat-label">Completed</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number">${certificatesCount}</div>
-                        <div class="stat-label">Certificates</div>
-                    </div>
+
+    renderCourseCard(course) {
+        const progress = this.courses.getCourseProgress(course.id);
+        const isEnrolled = this.courses.isEnrolled(course.id);
+
+        return `
+            <div class="course-card card">
+                <div class="course-image">
+                    <div class="course-icon">${course.icon || '📚'}</div>
                 </div>
-                
-                ${enrolledCourses.length > 0 ? `
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Continue Learning</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="progress-card">
-                                ${enrolledCourses.map(course => {
-                                    const progress = this.currentUser.progress[course.id] || { completed: 0, total: course.lessons.length };
-                                    const percentage = Math.round((progress.completed / progress.total) * 100);
-                                    
-                                    return `
-                                        <div class="progress-item">
-                                            <div class="progress-info">
-                                                <div class="progress-course">${course.title}</div>
-                                                <div class="progress-status">${progress.completed}/${progress.total} lessons completed</div>
-                                                <div class="progress mt-2">
-                                                    <div class="progress-bar" style="width: ${percentage}%"></div>
-                                                </div>
-                                            </div>
-                                            <div class="progress-percentage">${percentage}%</div>
-                                        </div>
-                                    `;
-                                }).join('')}
+
+                <div class="card-body">
+                    <div class="course-meta">
+                        <span class="badge badge-primary">${course.category}</span>
+                        <span class="badge badge-success">${course.level}</span>
+                    </div>
+
+                    <h3 class="card-title">${course.title}</h3>
+                    <p>${course.description}</p>
+
+                    <div class="course-stats">
+                        <small>👨‍🏫 ${course.instructor}</small>
+                        <small>⏱️ ${course.duration}</small>
+                        <small>📖 ${course.lessons?.length || 0} lessons</small>
+                    </div>
+
+                    ${isEnrolled && progress ? `
+                        <div class="progress-section">
+                            <div class="progress">
+                                <div class="progress-bar" style="width: ${progress.percentage}%"></div>
                             </div>
+                            <small>${progress.percentage}% complete</small>
                         </div>
-                        <div class="card-footer">
-                            <a href="/courses" class="btn btn-primary">Browse All Courses</a>
-                        </div>
-                    </div>
-                ` : `
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h3>Start Your Learning Journey</h3>
-                            <p class="text-gray-600 mb-4">You haven't enrolled in any courses yet. Browse our course catalog to get started!</p>
-                            <a href="/courses" class="btn btn-primary">Browse Courses</a>
-                        </div>
-                    </div>
-                `}
-                
-                <div class="grid grid-2 mt-6">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Recent Activity</h3>
-                        </div>
-                        <div class="card-body">
-                            <p class="text-gray-600">Your recent learning activity will appear here.</p>
-                        </div>
-                    </div>
-                    
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Achievements</h3>
-                        </div>
-                        <div class="card-body">
-                            ${certificatesCount > 0 ? 
-                                `<p>You've earned ${certificatesCount} certificate${certificatesCount > 1 ? 's' : ''}!</p>
-                                 <a href="/certificates" class="btn btn-outline">View Certificates</a>` :
-                                `<p class="text-gray-600">Complete courses to earn certificates and unlock achievements.</p>`
-                            }
-                        </div>
-                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="card-footer">
+                    ${isEnrolled ? `
+                        <button class="btn btn-primary" onclick="app.router.navigate('course/${course.id}')">
+                            ${progress?.percentage > 0 ? 'Continue' : 'Start'} Course
+                        </button>
+                    ` : `
+                        <button class="btn btn-outline" onclick="app.courses.enrollCourse('${course.id}')">
+                            Enroll Now
+                        </button>
+                    `}
                 </div>
             </div>
         `;
-        
-        this.renderContent(html);
     }
-    
-    showCourses() {
-        this.courses.renderCourseList();
+
+    calculateTotalHours() {
+        const enrolledCourses = this.courses.getEnrolledCourses();
+        return enrolledCourses.reduce((total, course) => {
+            const hours = parseInt(course.duration) || 0;
+            return total + hours;
+        }, 0);
     }
-    
-    showCourse(courseId) {
-        this.courses.renderCourseDetail(courseId);
-    }
-    
-    showLesson(courseId, lessonId) {
-        this.courses.renderLesson(courseId, lessonId);
-    }
-    
-    showQuiz(courseId, quizId) {
-        this.quiz.renderQuiz(courseId, quizId);
-    }
-    
-    showSearch() {
-        this.search.renderSearch();
-    }
-    
-    showCertificates() {
-        this.certificate.renderCertificates();
-    }
-    
-    showLogin() {
-        const html = `
-            <div class="auth-page">
-                <div class="auth-container">
-                    <div class="card" style="max-width: 500px; margin: 0 auto;">
-                        <div class="card-header text-center">
-                            <h2>Welcome Back</h2>
-                            <p class="text-gray-600">Sign in to your account</p>
-                        </div>
-                        <div class="card-body">
-                            <div class="demo-accounts mb-4" style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 1rem;">
-                                <h4 style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #495057;">Demo Accounts Available:</h4>
-                                <div style="font-size: 0.85rem; color: #6c757d;">
-                                    <p style="margin: 0.25rem 0;"><strong>Student:</strong> student@demo.com</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Teacher:</strong> teacher@demo.com</p>
-                                    <p style="margin: 0.25rem 0;"><strong>Admin:</strong> admin@demo.com</p>
-                                    <p style="margin: 0.5rem 0 0 0; font-style: italic;">Password for all accounts: <strong>demo123</strong></p>
-                                </div>
-                            </div>
-                            
-                            <form id="login-form" onsubmit="window.lmsApp.handleLogin(event)">
-                                <div class="form-group">
-                                    <label for="email" class="form-label">Email Address</label>
-                                    <input type="email" id="email" name="email" class="form-input" required 
-                                           placeholder="Choose a demo account above">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="password" class="form-label">Password</label>
-                                    <input type="password" id="password" name="password" class="form-input" required 
-                                           placeholder="Enter demo123">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="flex items-center gap-2">
-                                        <input type="checkbox" id="remember" name="remember">
-                                        <span class="text-sm">Remember me</span>
-                                    </label>
-                                </div>
-                                
-                                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                                    Sign In
-                                </button>
-                            </form>
-                            
-                            <div class="demo-buttons mt-3">
-                                <p class="text-sm text-gray-600 mb-2">Quick Login:</p>
-                                <div class="grid grid-1 gap-2">
-                                    <button onclick="window.lmsApp.quickLogin('student@demo.com')" class="btn btn-outline btn-sm">
-                                        Login as Student
-                                    </button>
-                                    <button onclick="window.lmsApp.quickLogin('teacher@demo.com')" class="btn btn-outline btn-sm">
-                                        Login as Teacher
-                                    </button>
-                                    <button onclick="window.lmsApp.quickLogin('admin@demo.com')" class="btn btn-outline btn-sm">
-                                        Login as Admin
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-footer text-center">
-                            <p class="text-sm text-gray-600">
-                                New to the platform? 
-                                <a href="/signup" class="text-blue-600 font-semibold">Create demo account</a>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        this.renderContent(html);
-    }
-    
-    showSignup() {
-        const html = `
-            <div class="auth-page">
-                <div class="auth-container">
-                    <div class="card" style="max-width: 500px; margin: 0 auto;">
-                        <div class="card-header text-center">
-                            <h2>Create Account</h2>
-                            <p class="text-gray-600">Join our learning platform</p>
-                        </div>
-                        <div class="card-body">
-                            <form id="signup-form" onsubmit="window.lmsApp.handleSignup(event)">
-                                <div class="grid grid-2 gap-4">
-                                    <div class="form-group">
-                                        <label for="firstName" class="form-label">First Name</label>
-                                        <input type="text" id="firstName" name="firstName" class="form-input" required 
-                                               placeholder="Enter your first name">
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="lastName" class="form-label">Last Name</label>
-                                        <input type="text" id="lastName" name="lastName" class="form-input" required 
-                                               placeholder="Enter your last name">
-                                    </div>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="email" class="form-label">Email Address</label>
-                                    <input type="email" id="email" name="email" class="form-input" required 
-                                           placeholder="Enter your email address">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="password" class="form-label">Password</label>
-                                    <input type="password" id="password" name="password" class="form-input" required 
-                                           placeholder="Create a strong password" minlength="8">
-                                    <small class="text-xs text-gray-500">Password must be at least 8 characters long</small>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label for="confirmPassword" class="form-label">Confirm Password</label>
-                                    <input type="password" id="confirmPassword" name="confirmPassword" class="form-input" required 
-                                           placeholder="Confirm your password">
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="flex items-start gap-2">
-                                        <input type="checkbox" id="terms" name="terms" required class="mt-1">
-                                        <span class="text-sm">
-                                            I agree to the <a href="/terms" class="text-blue-600">Terms of Service</a> 
-                                            and <a href="/privacy" class="text-blue-600">Privacy Policy</a>
-                                        </span>
-                                    </label>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="flex items-center gap-2">
-                                        <input type="checkbox" id="newsletter" name="newsletter">
-                                        <span class="text-sm">Subscribe to our newsletter for updates and tips</span>
-                                    </label>
-                                </div>
-                                
-                                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                                    Create Account
-                                </button>
-                            </form>
-                        </div>
-                        <div class="card-footer text-center">
-                            <p class="text-sm text-gray-600">
-                                Already have an account? 
-                                <a href="/login" class="text-blue-600 font-semibold">Sign in here</a>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        this.renderContent(html);
-    }
-    
-    showContact() {
-        const html = `
-            <div class="contact-page">
-                <div class="page-header text-center">
-                    <h1>Contact Us</h1>
-                    <p class="text-gray-600">Get in touch with our team</p>
-                </div>
-                
-                <div class="grid grid-1 lg:grid-2 gap-8">
-                    <div class="contact-info">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Get in Touch</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="contact-methods">
-                                    <div class="contact-method">
-                                        <div class="contact-icon">📧</div>
-                                        <div>
-                                            <h4>Email Support</h4>
-                                            <p class="text-gray-600">support@lmsplatform.com</p>
-                                            <p class="text-sm text-gray-500">We typically respond within 24 hours</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="contact-method">
-                                        <div class="contact-icon">📞</div>
-                                        <div>
-                                            <h4>Phone Support</h4>
-                                            <p class="text-gray-600">+1 (555) 123-4567</p>
-                                            <p class="text-sm text-gray-500">Monday - Friday, 9 AM - 6 PM EST</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="contact-method">
-                                        <div class="contact-icon">💬</div>
-                                        <div>
-                                            <h4>Live Chat</h4>
-                                            <p class="text-gray-600">Available on website</p>
-                                            <p class="text-sm text-gray-500">Monday - Friday, 9 AM - 5 PM EST</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="contact-method">
-                                        <div class="contact-icon">📍</div>
-                                        <div>
-                                            <h4>Office Address</h4>
-                                            <p class="text-gray-600">123 Learning Street<br>Education City, EC 12345</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="contact-form">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Send us a Message</h3>
-                            </div>
-                            <div class="card-body">
-                                <form id="contact-form" onsubmit="window.lmsApp.handleContact(event)">
-                                    <div class="grid grid-2 gap-4">
-                                        <div class="form-group">
-                                            <label for="firstName" class="form-label">First Name</label>
-                                            <input type="text" id="firstName" name="firstName" class="form-input" required>
-                                        </div>
-                                        
-                                        <div class="form-group">
-                                            <label for="lastName" class="form-label">Last Name</label>
-                                            <input type="text" id="lastName" name="lastName" class="form-input" required>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="email" class="form-label">Email Address</label>
-                                        <input type="email" id="email" name="email" class="form-input" required>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="subject" class="form-label">Subject</label>
-                                        <select id="subject" name="subject" class="form-select" required>
-                                            <option value="">Select a topic</option>
-                                            <option value="general">General Inquiry</option>
-                                            <option value="technical">Technical Support</option>
-                                            <option value="billing">Billing Questions</option>
-                                            <option value="courses">Course Content</option>
-                                            <option value="partnership">Partnership Opportunities</option>
-                                            <option value="feedback">Feedback & Suggestions</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="message" class="form-label">Message</label>
-                                        <textarea id="message" name="message" class="form-input" rows="5" required 
-                                                  placeholder="Tell us how we can help you..."></textarea>
-                                    </div>
-                                    
-                                    <button type="submit" class="btn btn-primary">
-                                        Send Message
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="faq-section mt-8">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Frequently Asked Questions</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="faq-list">
-                                <div class="faq-item">
-                                    <h4>How do I reset my password?</h4>
-                                    <p class="text-gray-600">Click on "Forgot Password" on the login page and follow the instructions sent to your email.</p>
-                                </div>
-                                
-                                <div class="faq-item">
-                                    <h4>Can I access courses offline?</h4>
-                                    <p class="text-gray-600">Yes! Our platform works offline once you've loaded the content. You can continue learning even without internet.</p>
-                                </div>
-                                
-                                <div class="faq-item">
-                                    <h4>How do I download my certificates?</h4>
-                                    <p class="text-gray-600">Visit the Certificates page in your dashboard and click the download button next to any completed course certificate.</p>
-                                </div>
-                                
-                                <div class="faq-item">
-                                    <h4>Is there a mobile app?</h4>
-                                    <p class="text-gray-600">Our web platform is fully responsive and can be installed as a PWA (Progressive Web App) on your mobile device for a native app experience.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        this.renderContent(html);
-    }
-    
-    showAbout() {
-        const html = `
-            <div class="about-page">
-                <div class="hero-section text-center mb-8">
-                    <h1>About LMS Platform</h1>
-                    <p class="text-lg text-gray-600 max-w-3xl mx-auto">
-                        Empowering learners worldwide with accessible, high-quality education through innovative technology and expert instruction.
-                    </p>
-                </div>
-                
-                <div class="grid grid-1 lg:grid-2 gap-8 mb-8">
-                    <div class="card">
-                        <div class="card-body">
-                            <h3>Our Mission</h3>
-                            <p class="text-gray-600">
-                                To democratize education by providing accessible, high-quality learning experiences that empower 
-                                individuals to achieve their personal and professional goals, regardless of their background or location.
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div class="card">
-                        <div class="card-body">
-                            <h3>Our Vision</h3>
-                            <p class="text-gray-600">
-                                A world where everyone has the opportunity to learn, grow, and succeed through innovative, 
-                                technology-driven education that adapts to each learner's unique needs and circumstances.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="features-section mb-8">
-                    <h2 class="text-center mb-6">Why Choose Our Platform?</h2>
-                    <div class="grid grid-1 md:grid-3 gap-6">
-                        <div class="feature-card text-center">
-                            <div class="feature-icon">🌐</div>
-                            <h4>Offline Learning</h4>
-                            <p class="text-gray-600">Learn anywhere, anytime with our offline-capable Progressive Web App technology.</p>
-                        </div>
-                        
-                        <div class="feature-card text-center">
-                            <div class="feature-icon">🎓</div>
-                            <h4>Expert Instructors</h4>
-                            <p class="text-gray-600">Learn from industry professionals and experienced educators who are passionate about teaching.</p>
-                        </div>
-                        
-                        <div class="feature-card text-center">
-                            <div class="feature-icon">📱</div>
-                            <h4>Mobile-First Design</h4>
-                            <p class="text-gray-600">Seamlessly switch between devices with our responsive, mobile-optimized platform.</p>
-                        </div>
-                        
-                        <div class="feature-card text-center">
-                            <div class="feature-icon">🏆</div>
-                            <h4>Verified Certificates</h4>
-                            <p class="text-gray-600">Earn recognized certificates that showcase your achievements and skills to employers.</p>
-                        </div>
-                        
-                        <div class="feature-card text-center">
-                            <div class="feature-icon">📊</div>
-                            <h4>Progress Tracking</h4>
-                            <p class="text-gray-600">Monitor your learning journey with detailed progress analytics and personalized recommendations.</p>
-                        </div>
-                        
-                        <div class="feature-card text-center">
-                            <div class="feature-icon">🔒</div>
-                            <h4>Privacy Focused</h4>
-                            <p class="text-gray-600">Your data stays secure with local storage and privacy-first design principles.</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="stats-section">
-                    <div class="card">
-                        <div class="card-header text-center">
-                            <h3>Our Impact</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="stats-grid">
-                                <div class="stat-card">
-                                    <div class="stat-number">10,000+</div>
-                                    <div class="stat-label">Active Learners</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-number">500+</div>
-                                    <div class="stat-label">Courses Available</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-number">50+</div>
-                                    <div class="stat-label">Expert Instructors</div>
-                                </div>
-                                <div class="stat-card">
-                                    <div class="stat-number">95%</div>
-                                    <div class="stat-label">Completion Rate</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        this.renderContent(html);
-    }
-    
-    showPrivacy() {
-        const html = `
-            <div class="legal-page">
-                <div class="page-header">
-                    <h1>Privacy Policy</h1>
-                    <p class="text-gray-600">Last updated: December 2024</p>
-                </div>
-                
-                <div class="card">
-                    <div class="card-body">
-                        <div class="legal-content">
-                            <section class="mb-6">
-                                <h3>Information We Collect</h3>
-                                <p>We collect information you provide directly to us, such as when you create an account, enroll in courses, or contact us for support.</p>
-                                <ul class="mt-3">
-                                    <li>Personal information (name, email address)</li>
-                                    <li>Learning progress and course completion data</li>
-                                    <li>Device and usage information for improving our services</li>
-                                </ul>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>How We Use Your Information</h3>
-                                <p>We use the information we collect to:</p>
-                                <ul class="mt-3">
-                                    <li>Provide and maintain our educational services</li>
-                                    <li>Track your learning progress and issue certificates</li>
-                                    <li>Communicate with you about our services</li>
-                                    <li>Improve our platform and develop new features</li>
-                                </ul>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Data Storage and Security</h3>
-                                <p>Your learning data is primarily stored locally on your device using browser storage technologies. This means:</p>
-                                <ul class="mt-3">
-                                    <li>Your progress and preferences stay on your device</li>
-                                    <li>You maintain control over your personal learning data</li>
-                                    <li>We implement industry-standard security measures</li>
-                                    <li>Data is encrypted both in transit and at rest</li>
-                                </ul>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Offline Functionality</h3>
-                                <p>Our platform is designed to work offline using Progressive Web App technology. This means course content and your progress are cached locally for offline access.</p>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Your Rights</h3>
-                                <p>You have the right to:</p>
-                                <ul class="mt-3">
-                                    <li>Access and update your personal information</li>
-                                    <li>Delete your account and associated data</li>
-                                    <li>Export your learning data</li>
-                                    <li>Opt out of non-essential communications</li>
-                                </ul>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Contact Us</h3>
-                                <p>If you have any questions about this Privacy Policy, please contact us at:</p>
-                                <ul class="mt-3">
-                                    <li>Email: privacy@lmsplatform.com</li>
-                                    <li>Address: 123 Learning Street, Education City, EC 12345</li>
-                                </ul>
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        this.renderContent(html);
-    }
-    
-    showTerms() {
-        const html = `
-            <div class="legal-page">
-                <div class="page-header">
-                    <h1>Terms of Service</h1>
-                    <p class="text-gray-600">Last updated: December 2024</p>
-                </div>
-                
-                <div class="card">
-                    <div class="card-body">
-                        <div class="legal-content">
-                            <section class="mb-6">
-                                <h3>Acceptance of Terms</h3>
-                                <p>By accessing and using the LMS Platform, you accept and agree to be bound by the terms and provision of this agreement.</p>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Use License</h3>
-                                <p>Permission is granted to temporarily access the materials on LMS Platform for personal, non-commercial transitory viewing only. This includes:</p>
-                                <ul class="mt-3">
-                                    <li>Access to course content for enrolled courses</li>
-                                    <li>Personal use of learning materials</li>
-                                    <li>Downloading certificates for completed courses</li>
-                                </ul>
-                                <p class="mt-3">This license shall automatically terminate if you violate any of these restrictions.</p>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>User Accounts</h3>
-                                <p>When you create an account with us, you must provide accurate and complete information. You are responsible for:</p>
-                                <ul class="mt-3">
-                                    <li>Safeguarding your password and account information</li>
-                                    <li>All activities that occur under your account</li>
-                                    <li>Notifying us immediately of unauthorized access</li>
-                                </ul>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Course Access and Completion</h3>
-                                <p>Course access and completion policies:</p>
-                                <ul class="mt-3">
-                                    <li>Course content is available for the duration of your enrollment</li>
-                                    <li>Certificates are issued upon successful completion of course requirements</li>
-                                    <li>Progress is tracked and stored locally on your device</li>
-                                    <li>You may retake quizzes as needed to meet passing requirements</li>
-                                </ul>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Prohibited Uses</h3>
-                                <p>You may not use our platform to:</p>
-                                <ul class="mt-3">
-                                    <li>Violate any applicable laws or regulations</li>
-                                    <li>Share course content with unauthorized users</li>
-                                    <li>Attempt to gain unauthorized access to our systems</li>
-                                    <li>Upload malicious code or interfere with platform functionality</li>
-                                </ul>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Intellectual Property</h3>
-                                <p>All course content, including but not limited to text, graphics, videos, and interactive elements, are the property of LMS Platform or our content partners and are protected by copyright laws.</p>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Limitation of Liability</h3>
-                                <p>LMS Platform shall not be liable for any damages arising from the use or inability to use our platform, including but not limited to direct, indirect, incidental, or consequential damages.</p>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Changes to Terms</h3>
-                                <p>We reserve the right to update these terms at any time. Users will be notified of significant changes, and continued use of the platform constitutes acceptance of the updated terms.</p>
-                            </section>
-                            
-                            <section class="mb-6">
-                                <h3>Contact Information</h3>
-                                <p>For questions about these Terms of Service, contact us at:</p>
-                                <ul class="mt-3">
-                                    <li>Email: legal@lmsplatform.com</li>
-                                    <li>Address: 123 Learning Street, Education City, EC 12345</li>
-                                </ul>
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        this.renderContent(html);
-    }
-    
+
     renderContent(html) {
         const mainContent = document.getElementById('main-content');
         if (mainContent) {
             mainContent.innerHTML = html;
         }
     }
-    
-    // User management methods
-    enrollInCourse(courseId) {
-        if (!this.currentUser.enrolledCourses.includes(courseId)) {
-            this.currentUser.enrolledCourses.push(courseId);
-            
-            // Initialize progress tracking
-            const course = COURSES_DATA.find(c => c.id === courseId);
-            if (course) {
-                this.currentUser.progress[courseId] = {
-                    completed: 0,
-                    total: course.lessons.length,
-                    completedLessons: [],
-                    lastAccessed: new Date().toISOString()
-                };
-            }
-            
-            this.storage.saveUser(this.currentUser);
-            return true;
-        }
-        return false;
-    }
-    
-    updateProgress(courseId, lessonId) {
-        const progress = this.currentUser.progress[courseId];
-        if (progress && !progress.completedLessons.includes(lessonId)) {
-            progress.completedLessons.push(lessonId);
-            progress.completed = progress.completedLessons.length;
-            progress.lastAccessed = new Date().toISOString();
-            
-            // Check if course is completed
-            if (progress.completed === progress.total) {
-                this.completeCourse(courseId);
-            }
-            
-            this.storage.saveUser(this.currentUser);
-        }
-    }
-    
-    completeCourse(courseId) {
-        if (!this.currentUser.completedCourses.includes(courseId)) {
-            this.currentUser.completedCourses.push(courseId);
-            
-            // Generate certificate
-            const course = COURSES_DATA.find(c => c.id === courseId);
-            if (course) {
-                const certificate = {
-                    id: 'cert_' + Date.now(),
-                    courseId: courseId,
-                    courseTitle: course.title,
-                    studentName: this.currentUser.name,
-                    completionDate: new Date().toISOString(),
-                    score: 100 // You can calculate actual score based on quizzes
-                };
-                
-                this.currentUser.certificates.push(certificate);
-            }
-            
-            this.storage.saveUser(this.currentUser);
-        }
-    }
-    
-    // Utility methods
-    getCurrentUser() {
-        return this.currentUser;
-    }
-    
-    updateUser(userData) {
-        this.currentUser = { ...this.currentUser, ...userData };
-        this.storage.saveUser(this.currentUser);
-    }
-    
-    handleLogin(event) {
-        event.preventDefault();
-        const formData = new FormData(event.target);
-        const email = formData.get('email');
-        const password = formData.get('password');
-        const remember = formData.get('remember');
-        
-        // Demo users for authentication
-        const demoUsers = {
-            'student@demo.com': {
-                id: 'demo_student',
-                name: 'Demo Student',
-                email: 'student@demo.com',
-                role: 'student',
-                enrolledCourses: ['js-basics', 'web-dev'],
-                completedLessons: [],
-                certificates: [],
-                progress: {},
-                isAuthenticated: true,
-                loginDate: new Date().toISOString()
-            },
-            'teacher@demo.com': {
-                id: 'demo_teacher',
-                name: 'Demo Teacher',
-                email: 'teacher@demo.com',
-                role: 'teacher',
-                enrolledCourses: ['js-basics', 'web-dev', 'react-advanced', 'node-backend'],
-                completedLessons: [],
-                certificates: [],
-                progress: {},
-                isAuthenticated: true,
-                loginDate: new Date().toISOString()
-            },
-            'admin@demo.com': {
-                id: 'demo_admin',
-                name: 'Demo Admin',
-                email: 'admin@demo.com',
-                role: 'admin',
-                enrolledCourses: ['js-basics', 'web-dev', 'react-advanced', 'node-backend', 'python-intro'],
-                completedLessons: [],
-                certificates: [],
-                progress: {},
-                isAuthenticated: true,
-                loginDate: new Date().toISOString()
-            }
-        };
-        
-        // Validate demo user credentials
-        if (email && password === 'demo123' && demoUsers[email]) {
-            const user = demoUsers[email];
-            
-            this.storage.saveUser(user);
-            this.currentUser = user;
-            
-            // Show success message
-            this.showNotification(`Welcome back, ${user.name}! You have been successfully logged in.`, 'success');
-            
-            // Redirect to dashboard after a brief delay
-            setTimeout(() => {
-                this.router.navigate('/');
-            }, 1500);
-        } else {
-            this.showNotification('Invalid credentials. Please use one of the demo accounts shown below.', 'error');
-        }
-    }
-    
-    handleSignup(event) {
-        event.preventDefault();
-        const formData = new FormData(event.target);
-        const firstName = formData.get('firstName');
-        const lastName = formData.get('lastName');
-        const email = formData.get('email');
-        const password = formData.get('password');
-        const confirmPassword = formData.get('confirmPassword');
-        const termsAccepted = formData.get('terms');
-        const newsletter = formData.get('newsletter');
-        
-        // Validate form data
-        if (!firstName || !lastName || !email || !password) {
-            this.showNotification('Please fill in all required fields.', 'error');
-            return;
-        }
-        
-        if (password !== confirmPassword) {
-            this.showNotification('Passwords do not match.', 'error');
-            return;
-        }
-        
-        if (password.length < 8) {
-            this.showNotification('Password must be at least 8 characters long.', 'error');
-            return;
-        }
-        
-        if (!termsAccepted) {
-            this.showNotification('You must accept the Terms of Service to create an account.', 'error');
-            return;
-        }
-        
-        // Create new user account
-        const user = {
-            id: 'user_' + Date.now(),
-            firstName: firstName,
-            lastName: lastName,
-            name: `${firstName} ${lastName}`,
-            email: email,
-            signupDate: new Date().toISOString(),
-            newsletter: !!newsletter,
-            isAuthenticated: true,
-            enrolledCourses: [],
-            completedLessons: [],
-            certificates: [],
-            progress: {}
-        };
-        
-        this.storage.saveUser(user);
-        this.currentUser = user;
-        
-        // Show success message
-        this.showNotification('Account created successfully! Welcome to our learning platform.', 'success');
-        
-        // Redirect to dashboard after a brief delay
-        setTimeout(() => {
-            this.router.navigate('/');
-        }, 2000);
-    }
-    
-    handleContact(event) {
-        event.preventDefault();
-        const formData = new FormData(event.target);
-        const firstName = formData.get('firstName');
-        const lastName = formData.get('lastName');
-        const email = formData.get('email');
-        const subject = formData.get('subject');
-        const message = formData.get('message');
-        
-        // Validate form data
-        if (!firstName || !lastName || !email || !subject || !message) {
-            this.showNotification('Please fill in all required fields.', 'error');
-            return;
-        }
-        
-        // Simulate sending message (in a real app, this would send to a backend)
-        const contactMessage = {
-            id: 'msg_' + Date.now(),
-            firstName: firstName,
-            lastName: lastName,
-            email: email,
-            subject: subject,
-            message: message,
-            timestamp: new Date().toISOString(),
-            status: 'sent'
-        };
-        
-        // Store message locally for demo purposes
-        const existingMessages = JSON.parse(localStorage.getItem('lms_contact_messages') || '[]');
-        existingMessages.push(contactMessage);
-        localStorage.setItem('lms_contact_messages', JSON.stringify(existingMessages));
-        
-        // Show success message
-        this.showNotification('Thank you for your message! We will get back to you within 24 hours.', 'success');
-        
-        // Reset form
-        event.target.reset();
-    }
-    
+
     showNotification(message, type = 'info') {
-        // Remove existing notifications
-        const existing = document.querySelector('.notification');
-        if (existing) {
-            existing.remove();
-        }
-        
-        // Create notification element
+        const container = document.getElementById('notification-container');
+        if (!container) return;
+
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.innerHTML = `
-            <div class="notification-content">
-                <span class="notification-message">${message}</span>
-                <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
-            </div>
+            <div>${message}</div>
+            <button onclick="this.parentElement.remove()" style="background:none;border:none;float:right;cursor:pointer;">&times;</button>
         `;
-        
-        // Add to page
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 5 seconds
+
+        container.appendChild(notification);
+
         setTimeout(() => {
-            if (notification.parentElement) {
-                notification.remove();
-            }
+            notification.remove();
         }, 5000);
     }
-    
-    quickLogin(email) {
-        // Auto-fill and submit login form
-        const emailInput = document.getElementById('email');
-        const passwordInput = document.getElementById('password');
-        
-        if (emailInput && passwordInput) {
-            emailInput.value = email;
-            passwordInput.value = 'demo123';
-            
-            // Create and dispatch a form submit event
-            const form = document.getElementById('login-form');
-            if (form) {
-                const event = new Event('submit', { bubbles: true, cancelable: true });
-                form.dispatchEvent(event);
-            }
+
+    showHome() {
+        const html = `
+            <div class="container">
+                <div class="hero-section text-center">
+                    <h1>Welcome to LMS Platform</h1>
+                    <p>Your gateway to quality education and professional development</p>
+                    <div class="hero-actions">
+                        <button class="btn btn-primary btn-lg" onclick="app.router.navigate('courses')">
+                            Browse Courses
+                        </button>
+                        <button class="btn btn-outline btn-lg" onclick="app.router.navigate('register')">
+                            Sign Up for Admission
+                        </button>
+                    </div>
+                </div>
+
+                <div class="features-section">
+                    <h2>Why Choose Our Platform?</h2>
+                    <div class="grid grid-3">
+                        <div class="feature-card card text-center">
+                            <div class="feature-icon">📚</div>
+                            <h3>Quality Courses</h3>
+                            <p>Learn from industry experts with comprehensive course materials</p>
+                        </div>
+                        <div class="feature-card card text-center">
+                            <div class="feature-icon">🏆</div>
+                            <h3>Certification</h3>
+                            <p>Get recognized certificates upon successful course completion</p>
+                        </div>
+                        <div class="feature-card card text-center">
+                            <div class="feature-icon">💻</div>
+                            <h3>Interactive Learning</h3>
+                            <p>Engage with quizzes, assignments, and hands-on projects</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.renderContent(html);
+    }
+
+    showPublicCourses() {
+        const html = `
+            <div class="container">
+                <div class="courses-header">
+                    <h1>Available Courses</h1>
+                    <p>Explore our course catalog. Sign up for admission to start learning!</p>
+                    <button class="btn btn-primary" onclick="app.router.navigate('register')">
+                        Apply for Admission
+                    </button>
+                </div>
+
+                <div class="courses-grid grid grid-3">
+                    ${COURSES_DATA.map(course => this.renderPublicCourseCard(course)).join('')}
+                </div>
+            </div>
+        `;
+        this.renderContent(html);
+    }
+
+    showCourseSyllabus(courseId) {
+        const course = COURSES_DATA.find(c => c.id === courseId);
+        if (!course) {
+            this.showError('Course not found');
+            return;
         }
+
+        const html = `
+            <div class="container">
+                <div class="course-syllabus">
+                    <div class="course-header">
+                        <div class="course-icon-large">${course.icon || '📚'}</div>
+                        <div class="course-info">
+                            <h1>${course.title}</h1>
+                            <p class="course-description">${course.description}</p>
+                            <div class="course-meta">
+                                <span class="badge badge-primary">${course.category}</span>
+                                <span class="badge badge-success">${course.level}</span>
+                                <span>👨‍🏫 ${course.instructor}</span>
+                                <span>⏱️ ${course.duration}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="syllabus-content">
+                        <h2>Course Syllabus</h2>
+                        <div class="lessons-preview">
+                            ${(course.lessons || []).map((lesson, index) => `
+                                <div class="lesson-preview card">
+                                    <div class="lesson-header">
+                                        <span class="lesson-number">${index + 1}</span>
+                                        <div class="lesson-info">
+                                            <h4>${lesson.title}</h4>
+                                            <p>${lesson.duration}</p>
+                                            <p class="lesson-description">${lesson.description || 'Comprehensive lesson covering key concepts'}</p>
+                                        </div>
+                                        <span class="text-muted">🔒 Admission Required</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="course-enrollment-cta">
+                            <div class="cta-card card text-center">
+                                <h3>Ready to Start Learning?</h3>
+                                <p>Sign up for admission to access this course and many more!</p>
+                                <button class="btn btn-primary btn-lg" onclick="app.router.navigate('register')">
+                                    Apply for Admission
+                                </button>
+                                <p class="text-muted">Already have an account? 
+                                    <a href="javascript:void(0)" onclick="app.router.navigate('login')">Sign in here</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.renderContent(html);
+    }
+
+    showAdmission() {
+        if (!this.currentUser) {
+            this.router.navigate('register');
+            return;
+        }
+
+        const html = `
+            <div class="container">
+                <div class="admission-container">
+                    <div class="admission-card card" style="max-width: 600px; margin: 2rem auto;">
+                        <div class="card-header text-center">
+                            <h1>Complete Your Admission</h1>
+                            <p>Welcome ${this.currentUser.name}! Complete your admission to access courses.</p>
+                        </div>
+
+                        <form id="admission-form" class="card-body">
+                            <div class="form-group">
+                                <label class="form-label">Phone Number</label>
+                                <input type="tel" class="form-input" name="phone" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Educational Background</label>
+                                <select class="form-input" name="education" required>
+                                    <option value="">Select your education level</option>
+                                    <option value="high_school">High School</option>
+                                    <option value="bachelor">Bachelor's Degree</option>
+                                    <option value="master">Master's Degree</option>
+                                    <option value="phd">PhD</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Learning Goals</label>
+                                <textarea class="form-input" name="goals" rows="3" 
+                                         placeholder="What do you hope to achieve through our courses?"
+                                         required></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="terms" required>
+                                    I agree to the terms and conditions
+                                </label>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                Complete Admission
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.renderContent(html);
+        this.setupAdmissionForm();
+    }
+
+    renderPublicCourseCard(course) {
+        return `
+            <div class="course-card card" onclick="app.router.navigate('course/${course.id}')">
+                <div class="course-image">
+                    <div class="course-icon">${course.icon || '📚'}</div>
+                </div>
+
+                <div class="card-body">
+                    <div class="course-meta">
+                        <span class="badge badge-primary">${course.category}</span>
+                        <span class="badge badge-success">${course.level}</span>
+                    </div>
+
+                    <h3 class="card-title">${course.title}</h3>
+                    <p>${course.description}</p>
+
+                    <div class="course-stats">
+                        <small>👨‍🏫 ${course.instructor}</small>
+                        <small>⏱️ ${course.duration}</small>
+                        <small>📖 ${course.lessons?.length || 0} lessons</small>
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    <button class="btn btn-outline" onclick="event.stopPropagation(); app.router.navigate('course/${course.id}')">
+                        View Syllabus
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    setupAdmissionForm() {
+        const form = document.getElementById('admission-form');
+        form?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            
+            // Update user with admission data
+            const updatedUser = {
+                ...this.currentUser,
+                hasAdmission: true,
+                admissionData: {
+                    phone: formData.get('phone'),
+                    education: formData.get('education'),
+                    goals: formData.get('goals'),
+                    admissionDate: new Date().toISOString()
+                }
+            };
+
+            this.storage.saveUser(updatedUser);
+            this.currentUser = updatedUser;
+
+            this.showNotification('Admission completed successfully! Welcome to LMS Platform!', 'success');
+            this.router.navigate('dashboard');
+        });
+    }
+
+    showContact() {
+        const currentYear = new Date().getFullYear();
+        
+        const html = `
+            <div class="container">
+                <div class="contact-page">
+                    <div class="contact-header text-center">
+                        <h1>Contact Us</h1>
+                        <p>We'd love to hear from you. Send us a message and we'll respond as soon as possible.</p>
+                    </div>
+
+                    <div class="contact-content grid grid-2">
+                        <div class="contact-form card">
+                            <div class="card-header">
+                                <h2>Send us a Message</h2>
+                            </div>
+                            <form id="contact-form" class="card-body">
+                                <div class="form-group">
+                                    <label class="form-label">Name</label>
+                                    <input type="text" class="form-input" name="name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-input" name="email" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Subject</label>
+                                    <input type="text" class="form-input" name="subject" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Message</label>
+                                    <textarea class="form-input" name="message" rows="5" required></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Send Message</button>
+                            </form>
+                        </div>
+
+                        <div class="contact-info">
+                            <div class="contact-methods">
+                                <div class="contact-method card">
+                                    <div class="contact-icon">📧</div>
+                                    <h3>Email</h3>
+                                    <p>support@lmsplatform.com</p>
+                                    <p>info@lmsplatform.com</p>
+                                </div>
+
+                                <div class="contact-method card">
+                                    <div class="contact-icon">📞</div>
+                                    <h3>Phone</h3>
+                                    <p>+1 (555) 123-4567</p>
+                                    <p>Monday - Friday, 9 AM - 6 PM</p>
+                                </div>
+
+                                <div class="contact-method card">
+                                    <div class="contact-icon">📍</div>
+                                    <h3>Address</h3>
+                                    <p>123 Education Street</p>
+                                    <p>Learning City, LC 12345</p>
+                                </div>
+
+                                <div class="contact-method card">
+                                    <div class="contact-icon">💬</div>
+                                    <h3>Live Chat</h3>
+                                    <p>Available 24/7</p>
+                                    <button class="btn btn-outline" onclick="app.showNotification('Live chat feature coming soon!', 'info')">
+                                        Start Chat
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="faq-section">
+                                <h3>Frequently Asked Questions</h3>
+                                <div class="faq-item">
+                                    <strong>How do I reset my password?</strong>
+                                    <p>Click on "Forgot Password" on the login page and follow the instructions.</p>
+                                </div>
+                                <div class="faq-item">
+                                    <strong>How long do I have access to a course?</strong>
+                                    <p>Once enrolled, you have lifetime access to the course materials.</p>
+                                </div>
+                                <div class="faq-item">
+                                    <strong>Can I download course materials?</strong>
+                                    <p>Yes, most course materials are available for download for offline study.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.renderContent(html);
+        this.setupContactForm();
+    }
+
+    showProfile() {
+        if (!this.currentUser) {
+            this.router.navigate('login');
+            return;
+        }
+
+        const currentYear = new Date().getFullYear();
+        const joinYear = new Date(this.currentUser.joinDate).getFullYear();
+        
+        const html = `
+            <div class="container">
+                <div class="profile-page">
+                    <div class="profile-header">
+                        <div class="profile-avatar">
+                            <div class="avatar-placeholder">
+                                ${this.currentUser.name.charAt(0).toUpperCase()}
+                            </div>
+                        </div>
+                        <div class="profile-info">
+                            <h1>${this.currentUser.name}</h1>
+                            <p class="profile-email">${this.currentUser.email}</p>
+                            <p class="profile-join-date">Member since ${joinYear}</p>
+                            ${this.currentUser.hasAdmission ? 
+                                '<span class="badge badge-success">Admission Completed</span>' : 
+                                '<span class="badge badge-warning">Admission Pending</span>'
+                            }
+                        </div>
+                    </div>
+
+                    <div class="profile-content grid grid-2">
+                        <div class="profile-form card">
+                            <div class="card-header">
+                                <h2>Edit Profile</h2>
+                            </div>
+                            <form id="profile-form" class="card-body">
+                                <div class="form-group">
+                                    <label class="form-label">Full Name</label>
+                                    <input type="text" class="form-input" name="name" value="${this.currentUser.name}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-input" name="email" value="${this.currentUser.email}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Phone</label>
+                                    <input type="tel" class="form-input" name="phone" value="${this.currentUser.profile?.phone || ''}">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Bio</label>
+                                    <textarea class="form-input" name="bio" rows="3" placeholder="Tell us about yourself...">${this.currentUser.profile?.bio || ''}</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Education Level</label>
+                                    <select class="form-input" name="education">
+                                        <option value="">Select education level</option>
+                                        <option value="high_school" ${this.currentUser.profile?.education === 'high_school' ? 'selected' : ''}>High School</option>
+                                        <option value="bachelor" ${this.currentUser.profile?.education === 'bachelor' ? 'selected' : ''}>Bachelor's Degree</option>
+                                        <option value="master" ${this.currentUser.profile?.education === 'master' ? 'selected' : ''}>Master's Degree</option>
+                                        <option value="phd" ${this.currentUser.profile?.education === 'phd' ? 'selected' : ''}>PhD</option>
+                                        <option value="other" ${this.currentUser.profile?.education === 'other' ? 'selected' : ''}>Other</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Update Profile</button>
+                            </form>
+                        </div>
+
+                        <div class="profile-stats">
+                            <div class="stats-card card">
+                                <h3>Learning Statistics</h3>
+                                <div class="stat-item">
+                                    <span class="stat-label">Courses Enrolled:</span>
+                                    <span class="stat-value">${this.courses.getEnrolledCourses().length}</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Courses Completed:</span>
+                                    <span class="stat-value">${this.courses.getCompletedCourses().length}</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Certificates Earned:</span>
+                                    <span class="stat-value">${this.certificates.getUserCertificates().length}</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Total Learning Hours:</span>
+                                    <span class="stat-value">${this.calculateTotalHours()}h</span>
+                                </div>
+                            </div>
+
+                            <div class="account-actions card">
+                                <h3>Account Actions</h3>
+                                <button class="btn btn-outline" onclick="app.changePassword()">
+                                    Change Password
+                                </button>
+                                <button class="btn btn-outline" onclick="app.exportData()">
+                                    Export Data
+                                </button>
+                                <button class="btn btn-danger" onclick="app.deleteAccount()">
+                                    Delete Account
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.renderContent(html);
+        this.setupProfileForm();
+    }
+
+    setupContactForm() {
+        const form = document.getElementById('contact-form');
+        form?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+
+            // Simulate form submission
+            setTimeout(() => {
+                this.showNotification('Thank you for your message! We\'ll get back to you soon.', 'success');
+                form.reset();
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send Message';
+            }, 1000);
+        });
+    }
+
+    setupProfileForm() {
+        const form = document.getElementById('profile-form');
+        form?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Updating...';
+
+            const formData = new FormData(form);
+            const profileData = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                profile: {
+                    phone: formData.get('phone'),
+                    bio: formData.get('bio'),
+                    education: formData.get('education')
+                }
+            };
+
+            const result = this.auth.updateUserProfile(profileData);
+            
+            if (result.success) {
+                this.currentUser = result.user;
+                this.showNotification('Profile updated successfully!', 'success');
+                this.updateNavigation();
+            } else {
+                this.showNotification(result.error, 'error');
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Update Profile';
+        });
+    }
+
+    changePassword() {
+        this.showNotification('Change password feature coming soon!', 'info');
+    }
+
+    exportData() {
+        const userData = {
+            user: this.currentUser,
+            courses: this.courses.getEnrolledCourses(),
+            certificates: this.certificates.getUserCertificates()
+        };
+        
+        const dataStr = JSON.stringify(userData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(dataBlob);
+        link.download = `lms-data-${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        
+        this.showNotification('Data exported successfully!', 'success');
+    }
+
+    deleteAccount() {
+        if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+            this.logout();
+            this.showNotification('Account deleted successfully', 'info');
+        }
+    }
+
+    updateCurrentYear() {
+        const currentYearElement = document.getElementById('current-year');
+        if (currentYearElement) {
+            currentYearElement.textContent = new Date().getFullYear();
+        }
+    }
+
+    showError(message) {
+        this.renderContent(`
+            <div class="container">
+                <div class="error-page text-center">
+                    <h1>Oops! Something went wrong</h1>
+                    <p>${message}</p>
+                    <button class="btn btn-primary" onclick="location.reload()">
+                        Reload Application
+                    </button>
+                </div>
+            </div>
+        `);
     }
 }
 
-// Initialize app when DOM is loaded
+// Initialize the application
+let app;
 document.addEventListener('DOMContentLoaded', () => {
-    window.lmsApp = new LMSApp();
-});
-
-// Global error handler
-window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
-});
-
-// Global unhandled promise rejection handler
-window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
+    app = new LMSApp();
 });
