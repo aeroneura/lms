@@ -32,6 +32,9 @@ class LMSApp {
             // Initialize router
             this.router.init();
 
+            // Initialize theme
+            this.initializeTheme();
+
             // Hide loading screen
             this.hideLoadingScreen();
 
@@ -79,6 +82,7 @@ class LMSApp {
             this.requireAdmission(() => this.quiz.showQuiz(params.courseId, params.quizId)));
         this.router.addRoute('search', () => this.requireAdmission(() => this.showSearch()));
         this.router.addRoute('certificates', () => this.requireAdmission(() => this.certificates.showCertificates()));
+        this.router.addRoute('settings', () => this.requireAuth(() => this.showSettings()));
 
         // Default route
         this.router.setDefaultRoute('');
@@ -184,6 +188,7 @@ class LMSApp {
                     <a href="/search" class="nav-link" data-route="search">Search</a>
                     <a href="/certificates" class="nav-link" data-route="certificates">Certificates</a>
                     <a href="/profile" class="nav-link" data-route="profile">Profile</a>
+                    <a href="/settings" class="nav-link" data-route="settings">Settings</a>
                     <a href="/contact" class="nav-link" data-route="contact">Contact</a>
                 `;
             }
@@ -1120,6 +1125,259 @@ class LMSApp {
         if (currentYearElement) {
             currentYearElement.textContent = new Date().getFullYear();
         }
+    }
+
+    initializeTheme() {
+        const savedTheme = this.storage.getItem('theme') || 'light';
+        this.setTheme(savedTheme);
+    }
+
+    setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        this.storage.setItem('theme', theme);
+    }
+
+    toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        this.setTheme(newTheme);
+        this.showNotification(`Switched to ${newTheme} mode`, 'success');
+    }
+
+    showSettings() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        
+        const html = `
+            <div class="container">
+                <div class="settings-page">
+                    <div class="settings-header">
+                        <h1>⚙️ Settings</h1>
+                        <p>Customize your learning experience</p>
+                    </div>
+
+                    <div class="settings-content grid lg:grid-2">
+                        <div class="appearance-settings card">
+                            <div class="settings-section">
+                                <h3>🎨 Appearance</h3>
+                                
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Theme</h4>
+                                        <p>Choose between light and dark mode</p>
+                                    </div>
+                                    <label class="theme-toggle">
+                                        <input type="checkbox" ${currentTheme === 'dark' ? 'checked' : ''} onchange="app.toggleTheme()">
+                                        <span class="toggle-slider">
+                                            <span class="toggle-icon moon-icon">🌙</span>
+                                            <span class="toggle-icon sun-icon">☀️</span>
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Font Size</h4>
+                                        <p>Adjust text size for better readability</p>
+                                    </div>
+                                    <select class="form-select" style="width: auto;" onchange="app.changeFontSize(this.value)">
+                                        <option value="small">Small</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="large">Large</option>
+                                    </select>
+                                </div>
+
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Reduced Motion</h4>
+                                        <p>Minimize animations and transitions</p>
+                                    </div>
+                                    <label class="theme-toggle">
+                                        <input type="checkbox" onchange="app.toggleReducedMotion(this.checked)">
+                                        <span class="toggle-slider">
+                                            <span class="toggle-icon">🏃</span>
+                                            <span class="toggle-icon">🚶</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="learning-settings card">
+                            <div class="settings-section">
+                                <h3>📚 Learning Preferences</h3>
+                                
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Auto-save Progress</h4>
+                                        <p>Automatically save your course progress</p>
+                                    </div>
+                                    <label class="theme-toggle">
+                                        <input type="checkbox" checked onchange="app.toggleAutoSave(this.checked)">
+                                        <span class="toggle-slider">
+                                            <span class="toggle-icon">💾</span>
+                                            <span class="toggle-icon">💾</span>
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Study Reminders</h4>
+                                        <p>Get notifications to continue learning</p>
+                                    </div>
+                                    <label class="theme-toggle">
+                                        <input type="checkbox" onchange="app.toggleReminders(this.checked)">
+                                        <span class="toggle-slider">
+                                            <span class="toggle-icon">🔔</span>
+                                            <span class="toggle-icon">🔕</span>
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Quiz Timer</h4>
+                                        <p>Show timer during quizzes</p>
+                                    </div>
+                                    <label class="theme-toggle">
+                                        <input type="checkbox" checked onchange="app.toggleQuizTimer(this.checked)">
+                                        <span class="toggle-slider">
+                                            <span class="toggle-icon">⏱️</span>
+                                            <span class="toggle-icon">⏱️</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="privacy-settings card">
+                            <div class="settings-section">
+                                <h3>🔒 Privacy & Security</h3>
+                                
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Profile Visibility</h4>
+                                        <p>Control who can see your profile</p>
+                                    </div>
+                                    <select class="form-select" style="width: auto;">
+                                        <option value="public">Public</option>
+                                        <option value="friends" selected>Friends Only</option>
+                                        <option value="private">Private</option>
+                                    </select>
+                                </div>
+
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Data Collection</h4>
+                                        <p>Allow analytics to improve the platform</p>
+                                    </div>
+                                    <label class="theme-toggle">
+                                        <input type="checkbox" checked onchange="app.toggleAnalytics(this.checked)">
+                                        <span class="toggle-slider">
+                                            <span class="toggle-icon">📊</span>
+                                            <span class="toggle-icon">📊</span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="account-settings card">
+                            <div class="settings-section">
+                                <h3>👤 Account Management</h3>
+                                
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Two-Factor Authentication</h4>
+                                        <p>Add extra security to your account</p>
+                                    </div>
+                                    <button class="btn btn-outline" onclick="app.setupTwoFactor()">
+                                        Enable 2FA
+                                    </button>
+                                </div>
+
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Download Data</h4>
+                                        <p>Export all your learning data</p>
+                                    </div>
+                                    <button class="btn btn-outline" onclick="app.exportData()">
+                                        Download
+                                    </button>
+                                </div>
+
+                                <div class="setting-item">
+                                    <div class="setting-info">
+                                        <h4>Delete Account</h4>
+                                        <p>Permanently remove your account and data</p>
+                                    </div>
+                                    <button class="btn btn-danger" onclick="app.deleteAccount()">
+                                        Delete Account
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-footer card text-center" style="margin-top: 2rem;">
+                        <h3>Need Help?</h3>
+                        <p>If you have any questions about these settings, feel free to contact our support team.</p>
+                        <button class="btn btn-primary" onclick="app.router.navigate('contact')">
+                            Contact Support
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        this.renderContent(html);
+    }
+
+    changeFontSize(size) {
+        const sizes = {
+            small: '14px',
+            medium: '16px',
+            large: '18px'
+        };
+        document.documentElement.style.fontSize = sizes[size];
+        this.storage.setItem('fontSize', size);
+        this.showNotification(`Font size changed to ${size}`, 'success');
+    }
+
+    toggleReducedMotion(enabled) {
+        if (enabled) {
+            document.documentElement.style.setProperty('--transition', 'none');
+            document.documentElement.style.setProperty('--transition-slow', 'none');
+        } else {
+            document.documentElement.style.removeProperty('--transition');
+            document.documentElement.style.removeProperty('--transition-slow');
+        }
+        this.storage.setItem('reducedMotion', enabled);
+        this.showNotification(`Reduced motion ${enabled ? 'enabled' : 'disabled'}`, 'success');
+    }
+
+    toggleAutoSave(enabled) {
+        this.storage.setItem('autoSave', enabled);
+        this.showNotification(`Auto-save ${enabled ? 'enabled' : 'disabled'}`, 'success');
+    }
+
+    toggleReminders(enabled) {
+        this.storage.setItem('reminders', enabled);
+        this.showNotification(`Study reminders ${enabled ? 'enabled' : 'disabled'}`, 'success');
+    }
+
+    toggleQuizTimer(enabled) {
+        this.storage.setItem('quizTimer', enabled);
+        this.showNotification(`Quiz timer ${enabled ? 'enabled' : 'disabled'}`, 'success');
+    }
+
+    toggleAnalytics(enabled) {
+        this.storage.setItem('analytics', enabled);
+        this.showNotification(`Data collection ${enabled ? 'enabled' : 'disabled'}`, 'success');
+    }
+
+    setupTwoFactor() {
+        this.showNotification('Two-factor authentication setup coming soon!', 'info');
     }
 
     showError(message) {

@@ -120,4 +120,20 @@ class Storage {
         const results = this.getItem('quiz_results') || {};
         return results[courseId] || null;
     }
+
+    getTheme() {
+        return this.getItem('theme') || 'light';
+    }
+
+    saveTheme(theme) {
+        this.setItem('theme', theme);
+    }
+
+    getSettings() {
+        return this.getItem('userSettings') || {};
+    }
+
+    saveSettings(settings) {
+        this.setItem('userSettings', settings);
+    }
 }
