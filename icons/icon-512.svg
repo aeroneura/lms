@@ -1,0 +1,129 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="mainGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+            <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
+        </linearGradient>
+        
+        <linearGradient id="bookGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#f8fafc;stop-opacity:1" />
+        </linearGradient>
+        
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="4" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.2"/>
+        </filter>
+    </defs>
+    
+    <!-- Background Circle -->
+    <circle cx="256" cy="256" r="240" fill="url(#mainGradient)" stroke="#ffffff" stroke-width="8" filter="url(#shadow)"/>
+    
+    <!-- Outer Decoration Ring -->
+    <circle cx="256" cy="256" r="220" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="30 15" opacity="0.3"/>
+    
+    <!-- Main Content Group -->
+    <g transform="translate(256, 256)">
+        <!-- Large Book -->
+        <g filter="url(#shadow)">
+            <!-- Book Base -->
+            <rect x="-80" y="-60" width="160" height="120" rx="8" fill="url(#bookGradient)"/>
+            
+            <!-- Book Shadow/Depth -->
+            <rect x="-76" y="-56" width="152" height="112" rx="6" fill="#e2e8f0"/>
+            <rect x="-72" y="-52" width="144" height="104" rx="4" fill="#ffffff"/>
+            
+            <!-- Book Spine -->
+            <rect x="-80" y="-60" width="20" height="120" rx="8" fill="#3b82f6"/>
+            <rect x="-76" y="-56" width="12" height="112" fill="#2563eb"/>
+            
+            <!-- Spine Details -->
+            <rect x="-74" y="-40" width="8" height="4" rx="1" fill="#1d4ed8"/>
+            <rect x="-74" y="-20" width="8" height="4" rx="1" fill="#1d4ed8"/>
+            <rect x="-74" y="0" width="8" height="4" rx="1" fill="#1d4ed8"/>
+            <rect x="-74" y="20" width="8" height="4" rx="1" fill="#1d4ed8"/>
+            
+            <!-- Page Content Lines -->
+            <line x1="-60" y1="-32" x2="40" y2="-32" stroke="#94a3b8" stroke-width="2"/>
+            <line x1="-60" y1="-20" x2="40" y2="-20" stroke="#94a3b8" stroke-width="2"/>
+            <line x1="-60" y1="-8" x2="40" y2="-8" stroke="#94a3b8" stroke-width="2"/>
+            <line x1="-60" y1="4" x2="40" y2="4" stroke="#94a3b8" stroke-width="2"/>
+            <line x1="-60" y1="16" x2="32" y2="16" stroke="#94a3b8" stroke-width="2"/>
+            <line x1="-60" y1="28" x2="36" y2="28" stroke="#94a3b8" stroke-width="2"/>
+            
+            <!-- Bookmark -->
+            <rect x="60" y="-60" width="8" height="80" fill="#ef4444"/>
+            <polygon points="64,-60 72,-60 68,-52 64,-60" fill="#dc2626"/>
+        </g>
+        
+        <!-- Graduation Cap -->
+        <g transform="translate(0, -120)" filter="url(#shadow)">
+            <!-- Cap Base -->
+            <polygon points="-60,-20 60,-20 50,-8 -50,-8" fill="#1e40af"/>
+            <rect x="-50" y="-8" width="100" height="12" rx="2" fill="#3b82f6"/>
+            
+            <!-- Cap Top Highlight -->
+            <polygon points="-55,-18 55,-18 50,-12 -50,-12" fill="#60a5fa" opacity="0.5"/>
+            
+            <!-- Tassel -->
+            <line x1="50" y1="-14" x2="80" y2="20" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="80" cy="20" r="6" fill="#fbbf24"/>
+            <circle cx="80" cy="20" r="4" fill="#f59e0b"/>
+            
+            <!-- Tassel Threads -->
+            <line x1="76" y1="24" x2="72" y2="36" stroke="#f59e0b" stroke-width="2"/>
+            <line x1="80" y1="26" x2="76" y2="38" stroke="#f59e0b" stroke-width="2"/>
+            <line x1="84" y1="24" x2="80" y2="36" stroke="#f59e0b" stroke-width="2"/>
+        </g>
+        
+        <!-- Knowledge Symbols -->
+        <!-- Lightbulb -->
+        <g transform="translate(80, 80)" filter="url(#shadow)">
+            <circle cx="0" cy="-8" r="16" fill="#fbbf24"/>
+            <circle cx="0" cy="-8" r="12" fill="#fde047"/>
+            <rect x="-8" y="8" width="16" height="12" rx="2" fill="#f59e0b"/>
+            <rect x="-6" y="20" width="12" height="4" rx="1" fill="#d97706"/>
+            <line x1="-4" y1="24" x2="4" y2="24" stroke="#92400e" stroke-width="2"/>
+            
+            <!-- Light Rays -->
+            <line x1="-24" y1="-8" x2="-20" y2="-8" stroke="#fde047" stroke-width="3" stroke-linecap="round"/>
+            <line x1="20" y1="-8" x2="24" y2="-8" stroke="#fde047" stroke-width="3" stroke-linecap="round"/>
+            <line x1="0" y1="-32" x2="0" y2="-28" stroke="#fde047" stroke-width="3" stroke-linecap="round"/>
+            <line x1="-17" y1="-25" x2="-14" y2="-22" stroke="#fde047" stroke-width="3" stroke-linecap="round"/>
+            <line x1="17" y1="-25" x2="14" y2="-22" stroke="#fde047" stroke-width="3" stroke-linecap="round"/>
+        </g>
+        
+        <!-- Certificate Icon -->
+        <g transform="translate(-80, 80)" filter="url(#shadow)">
+            <rect x="-12" y="-16" width="24" height="32" rx="2" fill="#ffffff" stroke="#e5e7eb" stroke-width="2"/>
+            <circle cx="0" cy="-8" r="6" fill="#10b981"/>
+            <path d="M -3,-8 L -1,-6 L 3,-10" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            
+            <!-- Certificate Lines -->
+            <line x1="-8" y1="0" x2="8" y2="0" stroke="#d1d5db" stroke-width="1"/>
+            <line x1="-8" y1="4" x2="8" y2="4" stroke="#d1d5db" stroke-width="1"/>
+            <line x1="-8" y1="8" x2="6" y2="8" stroke="#d1d5db" stroke-width="1"/>
+            
+            <!-- Ribbon -->
+            <polygon points="-4,16 4,16 6,20 2,24 -2,24 -6,20" fill="#ef4444"/>
+        </g>
+        
+        <!-- Progress Circle -->
+        <g transform="translate(-80, -80)">
+            <circle cx="0" cy="0" r="20" fill="none" stroke="#10b981" stroke-width="4"/>
+            <circle cx="0" cy="0" r="20" fill="none" stroke="#34d399" stroke-width="4" 
+                    stroke-dasharray="75.4 25.1" stroke-linecap="round" transform="rotate(-90)"/>
+            <text x="0" y="6" text-anchor="middle" fill="#10b981" font-family="Arial, sans-serif" font-size="12" font-weight="bold">75%</text>
+        </g>
+        
+        <!-- Star Achievement -->
+        <g transform="translate(80, -80)">
+            <polygon points="0,-12 3.5,-4 12,-4 6,2 8.5,10 0,6 -8.5,10 -6,2 -12,-4 -3.5,-4" fill="#fbbf24"/>
+            <polygon points="0,-10 2.5,-3 8,-3 4,1 6,8 0,5 -6,8 -4,1 -8,-3 -2.5,-3" fill="#fde047"/>
+        </g>
+    </g>
+    
+    <!-- Outer Progress Ring -->
+    <circle cx="256" cy="256" r="240" fill="none" stroke="#ffffff" stroke-width="4" 
+            stroke-dasharray="50 20" opacity="0.2" transform="rotate(45 256 256)"/>
+</svg>
